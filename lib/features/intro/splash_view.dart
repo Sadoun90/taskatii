@@ -23,9 +23,10 @@ class _SplashViewState extends State<SplashView> {
     Future.delayed(const Duration(seconds: 4), () {
       PushWithReplacement(
           context,
-          (AppLocalStorage.getCachedData(AppLocalStorage.KIsUpload) ?? false) == true
-              ? HomeView()
-              : UploadView());
+          (AppLocalStorage.getCachedData(AppLocalStorage.KIsUpload) ?? false) ==
+                  true
+              ? const HomeView()
+              : const UploadView());
     });
   }
 
@@ -39,12 +40,17 @@ class _SplashViewState extends State<SplashView> {
             Lottie.asset('assets/logo.json'),
             Text(
               'Taskati',
-              style: getTitleTextStyle(color: AppColors.PrimaryColor),
+              style: getTitleTextStyle(
+                context,
+                color: AppColors.PrimaryColor,
+              ),
             ),
             const Gap(10),
             Text(
               'It\'s time to get organized',
-              style: getSmallTextStyle(color: AppColors.accentColor),
+              style: getSmallTextStyle(
+                color: AppColors.accentColor,
+              ),
             ),
           ],
         ),

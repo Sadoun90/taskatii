@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,7 +17,6 @@ class UploadView extends StatefulWidget {
 }
 
 class _UploadViewState extends State<UploadView> {
-  // XFile ? file;
   String? path;
   String name = '';
 
@@ -52,7 +50,7 @@ class _UploadViewState extends State<UploadView> {
               },
               child: Text(
                 'Done',
-                style: getBodyTextStyle(),
+                style: getBodyTextStyle(context, color: AppColors.whiteColor),
               ))
         ],
       ),
@@ -68,25 +66,26 @@ class _UploadViewState extends State<UploadView> {
                   backgroundImage: (path != null)
                       ? FileImage(File(path!))
                       : const NetworkImage(
-                          'https://th.bing.com/th/id/OIP.Wim1Ar6paI5-FdmrOedMMAHaHa?w=191&h=191&c=7&r=0&o=5&dpr=1.3&pid=1.7'),
+                          'https://th.bing.com/th/id/OIP.Wim1Ar6paI5-FdmrOedMMAHaHa?w=191&h=191&c=7&r=0&o=5&dpr=1.3&pid=1.7',
+                        ) as ImageProvider,
                 ),
                 const Gap(20),
                 CustomButton(
-                  text: 'Upload From camera',
+                  text: 'Upload From Camera',
                   onPressed: () {
                     pickImage(true);
                   },
                 ),
-                Gap(20),
+                const Gap(20),
                 CustomButton(
                   text: 'Upload From Gallery',
                   onPressed: () {
                     pickImage(false);
                   },
                 ),
-                Gap(20),
-                Divider(),
-                Gap(20),
+                const Gap(20),
+                const Divider(),
+                const Gap(20),
                 TextFormField(
                   onChanged: (value) {
                     setState(() {
@@ -102,7 +101,7 @@ class _UploadViewState extends State<UploadView> {
                       focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide:
-                              BorderSide(color: AppColors.primaryColor)),
+                              BorderSide(color: AppColors.PrimaryColor)),
                       errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(color: AppColors.redcolor)),
@@ -118,9 +117,9 @@ class _UploadViewState extends State<UploadView> {
     );
   }
 
-  pickImage(bool iscamera) {
+  void pickImage(bool isCamera) {
     ImagePicker()
-        .pickImage(source: iscamera ? ImageSource.camera : ImageSource.gallery)
+        .pickImage(source: isCamera ? ImageSource.camera : ImageSource.gallery)
         .then((value) {
       if (value != null) {
         setState(() {

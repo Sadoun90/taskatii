@@ -21,15 +21,15 @@ class TodayHeader extends StatelessWidget {
             children: [
               Text(
                 DateFormat.yMMMMd().format(DateTime.now()),
-                style: getTitleTextStyle(
-                    color: AppColors.blackColor,
+                style: getTitleTextStyle(context,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 15,
                     fontWeight: FontWeight.bold),
               ),
               Text(
                 'Today',
-                style: getTitleTextStyle(
-                    color: AppColors.blackColor,
+                style: getTitleTextStyle(context,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 15,
                     fontWeight: FontWeight.bold),
               ),
@@ -40,7 +40,7 @@ class TodayHeader extends StatelessWidget {
             width: 140,
             text: '+ Add Task',
             onPressed: () {
-              Push(context, AddTask());
+              Push(context, const AddTask());
             })
       ],
     );
