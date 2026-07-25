@@ -1,6 +1,5 @@
 <div align="center">
 
-  <img src="https://img.icons8.com/isometric/512/000000/task-completed.png" width="120" height="120" alt="Taskatii Logo" />
 
   # 📌 Taskatii (تاسكاتي)
   ### *Your Ultimate Productivity & Task Management Companion*
