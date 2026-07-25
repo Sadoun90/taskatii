@@ -1,79 +1,88 @@
 import 'package:flutter/material.dart';
 import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
+import 'package:taskatii/core/utils/colors.dart';
+import 'package:taskatii/core/utils/text_style.dart';
 
 class AppTheme {
-  // ignore: non_constant_identifier_names
-  static ThemeData LightTheme = ThemeData(
+  static ThemeData lightTheme = ThemeData(
       scaffoldBackgroundColor: AppColors.whiteColor,
-      appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.whiteColor,
-        centerTitle: true,
-      ),
+      appBarTheme:
+          AppBarTheme(backgroundColor: AppColors.whiteColor, centerTitle: true),
       colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.PrimaryColor,
+        seedColor: AppColors.primaryColor,
         onSurface: AppColors.blackColor,
       ),
       datePickerTheme: DatePickerThemeData(
         backgroundColor: AppColors.whiteColor,
-        headerForegroundColor: AppColors.PrimaryColor,
+        headerForegroundColor: AppColors.primaryColor,
       ),
       timePickerTheme: TimePickerThemeData(
-          backgroundColor: AppColors.whiteColor,
-          dialBackgroundColor: AppColors.primaryColor,
-          hourMinuteColor: AppColors.primaryColor,
-          dayPeriodColor: AppColors.accentColor,
-          hourMinuteTextColor: AppColors.darkColorScaffoldColor),
+        backgroundColor: AppColors.whiteColor,
+      ),
       inputDecorationTheme: InputDecorationTheme(
         hintStyle: getSmallTextStyle(),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.PrimaryColor)),
+            borderSide: BorderSide(
+              color: AppColors.primaryColor,
+            )),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.PrimaryColor)),
+            borderSide: BorderSide(
+              color: AppColors.primaryColor,
+            )),
         errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.redcolor)),
+            borderSide: BorderSide(
+              color: AppColors.redcolor,
+            )),
         focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.redcolor)),
+            borderSide: BorderSide(
+              color: AppColors.redcolor,
+            )),
       ));
 
-  // ignore: non_constant_identifier_names
-  static ThemeData DarkTheme = ThemeData(
+  static ThemeData darkTheme = ThemeData(
       scaffoldBackgroundColor: AppColors.darkColorScaffoldColor,
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.darkColorScaffoldColor,
-        centerTitle: true,
-      ),
+          backgroundColor: AppColors.darkColorScaffoldColor, centerTitle: true),
       colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.PrimaryColor,
+        seedColor: AppColors.primaryColor,
         onSurface: AppColors.whiteColor,
       ),
       datePickerTheme: DatePickerThemeData(
-        backgroundColor: AppColors.darkColorScaffoldColor,
-        headerForegroundColor: AppColors.PrimaryColor,
-      ),
+          backgroundColor: AppColors.darkColorScaffoldColor,
+          headerForegroundColor: AppColors.primaryColor),
       timePickerTheme: TimePickerThemeData(
           backgroundColor: AppColors.darkColorScaffoldColor,
-          dialBackgroundColor: AppColors.primaryColor,
-          hourMinuteColor: AppColors.primaryColor,
+          dialBackgroundColor: AppColors.accentColor,
+          hourMinuteTextColor: AppColors.primaryColor,
           dayPeriodColor: AppColors.accentColor,
-          hourMinuteTextColor: AppColors.darkColorScaffoldColor),
+          hourMinuteColor: AppColors.accentColor,
+          dayPeriodTextColor: AppColors.primaryColor),
       inputDecorationTheme: InputDecorationTheme(
         hintStyle: getSmallTextStyle(),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.PrimaryColor)),
+            borderSide: BorderSide(
+              color: AppColors.primaryColor,
+            )),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.PrimaryColor)),
+            borderSide: BorderSide(
+              color: AppColors.primaryColor,
+            )),
         errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.redcolor)),
+            borderSide: BorderSide(
+              color: AppColors.redcolor,
+            )),
         focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.redcolor)),
+            borderSide: BorderSide(
+              color: AppColors.redcolor,
+            )),
       ));
 }

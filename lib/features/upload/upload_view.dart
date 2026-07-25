@@ -22,36 +22,43 @@ class _UploadViewState extends State<UploadView> {
 
   @override
   Widget build(BuildContext context) {
+    bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         actions: [
           TextButton(
-              onPressed: () {
-                if (path != null && name.isNotEmpty) {
-                  AppLocalStorage.casheData(AppLocalStorage.KName, name);
-                  AppLocalStorage.casheData(AppLocalStorage.KImage, path);
-                  AppLocalStorage.casheData(AppLocalStorage.KIsUpload, true);
-
-                  PushWithReplacement(context, const HomeView());
-                } else if (path == null && name.isNotEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      backgroundColor: AppColors.redcolor,
-                      content: const Text('Please upload your Image')));
-                } else if (path != null && name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      backgroundColor: AppColors.redcolor,
-                      content: const Text('Please enter your name')));
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      backgroundColor: AppColors.redcolor,
-                      content: const Text(
-                          'Please upload your Image and enter your name')));
-                }
-              },
-              child: Text(
-                'Done',
-                style: getBodyTextStyle(context, color: AppColors.whiteColor),
-              ))
+            onPressed: () {
+              if (path != null && name.isNotEmpty) {
+                AppLocalStorage.casheData(AppLocalStorage.KName, name);
+                AppLocalStorage.casheData(AppLocalStorage.KImage, path);
+                AppLocalStorage.casheData(AppLocalStorage.KIsUpload, true);
+                PushWithReplacement(context, const HomeView());
+              } else if (path == null && name.isNotEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  backgroundColor: AppColors.redcolor,
+                  content: const Text('Please upload your Image'),
+                ));
+              } else if (path != null && name.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  backgroundColor: AppColors.redcolor,
+                  content: const Text('Please enter your name'),
+                ));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  backgroundColor: AppColors.redcolor,
+                  content: const Text(
+                    'Please upload your Image and enter your name',
+                  ),
+                ));
+              }
+            },
+            child: Text(
+              'Done',
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : Colors.black,
+              ),
+            ),
+          )
         ],
       ),
       body: Center(
@@ -93,22 +100,25 @@ class _UploadViewState extends State<UploadView> {
                     });
                   },
                   decoration: InputDecoration(
-                      hintText: 'Enter Your Name',
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              BorderSide(color: AppColors.PrimaryColor)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              BorderSide(color: AppColors.PrimaryColor)),
-                      errorBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: AppColors.redcolor)),
-                      focusedErrorBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: AppColors.redcolor))),
-                )
+                    hintText: 'Enter Your Name',
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: AppColors.PrimaryColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: AppColors.PrimaryColor),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: AppColors.redcolor),
+                    ),
+                    focusedErrorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: AppColors.redcolor),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

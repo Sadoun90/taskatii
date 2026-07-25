@@ -26,8 +26,6 @@ class _HomeViewState extends State<HomeView> {
 
   @override
   Widget build(BuildContext context) {
-    String name = AppLocalStorage.getCachedData(AppLocalStorage.KName) ?? '';
-
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: SafeArea(
@@ -35,8 +33,7 @@ class _HomeViewState extends State<HomeView> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              HomeHeaderWidget(
-                  name: name), // Pass the name to the header widget
+              const HomeHeaderWidget(), 
               const Gap(15),
               const TodayHeader(),
               const Gap(20),
@@ -60,15 +57,10 @@ class _HomeViewState extends State<HomeView> {
               Expanded(
                 child: ValueListenableBuilder(
                   valueListenable: AppLocalStorage.taskBox.listenable(),
-                  builder: (context, taskBox, child) {
-                    List<TaskModel> tasks = [];
-
-                    taskBox.keys.forEach((key) {
-                      if (selectDate ==
-                          AppLocalStorage.getCacheTaskdData(key)?.date) {
-                        tasks.add(AppLocalStorage.getCacheTaskdData(key)!);
-                      }
-                    });
+                  builder: (context, Box<TaskModel> taskBox, child) {
+                    List<TaskModel> tasks = taskBox.values
+                        .where((task) => task.date == selectDate)
+                        .toList();
 
                     return tasks.isEmpty
                         ? Center(

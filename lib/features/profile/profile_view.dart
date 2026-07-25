@@ -30,6 +30,7 @@ class _ProfileViewState extends State<ProfileView> {
   Widget build(BuildContext context) {
     bool mode =
         AppLocalStorage.getCachedData(AppLocalStorage.KIsDarkMode) ?? false;
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -42,16 +43,16 @@ class _ProfileViewState extends State<ProfileView> {
           ),
         ),
         actions: [
-          // make dark and light button
           IconButton(
-              onPressed: () {
-                AppLocalStorage.casheData(AppLocalStorage.KIsDarkMode, !mode);
-                setState(() {});
-              },
-              icon: Icon(
-                mode ? Icons.light_mode  : Icons.dark_mode,
-                color: AppColors.PrimaryColor,
-              ))
+            onPressed: () {
+              AppLocalStorage.casheData(AppLocalStorage.KIsDarkMode, !mode);
+              setState(() {});
+            },
+            icon: Icon(
+              mode ? Icons.light_mode : Icons.dark_mode,
+              color: AppColors.primaryColor,
+            ),
+          ),
         ],
       ),
       body: Center(
@@ -83,13 +84,19 @@ class _ProfileViewState extends State<ProfileView> {
                               backgroundColor:
                                   Theme.of(context).scaffoldBackgroundColor,
                               builder: (context) {
+                                bool isDarkMode = AppLocalStorage.getCachedData(
+                                        AppLocalStorage.KIsDarkMode) ??
+                                    false;
+
                                 return Padding(
                                   padding: const EdgeInsets.all(20),
                                   child: Container(
                                     width: double.infinity,
                                     height: 170,
                                     decoration: BoxDecoration(
-                                      color: AppColors.darkColorScaffoldColor,
+                                      color: isDarkMode
+                                          ? Colors.black
+                                          : Colors.white,
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: Column(
@@ -132,7 +139,7 @@ class _ProfileViewState extends State<ProfileView> {
                           ),
                         ),
                       ),
-                    )
+                    ),
                   ],
                 ),
                 const Gap(20),
@@ -152,37 +159,55 @@ class _ProfileViewState extends State<ProfileView> {
                           context: context,
                           builder: (BuildContext context) {
                             String newName = name;
+                            bool isDarkMode = AppLocalStorage.getCachedData(
+                                    AppLocalStorage.KIsDarkMode) ??
+                                false;
+
                             return AlertDialog(
+                              backgroundColor:
+                                  isDarkMode ? Colors.black : Colors.white,
                               title: Text(
                                 'Edit Name',
-                                style: TextStyle(color: AppColors.blackColor),
+                                style: TextStyle(
+                                    color: isDarkMode
+                                        ? Colors.white
+                                        : Colors.black),
                               ),
                               content: TextField(
                                 onChanged: (value) {
-                                  setState(() {
-                                    newName = value;
-                                  });
+                                  newName = value;
                                 },
                                 controller: TextEditingController(text: name),
                                 decoration: InputDecoration(
                                   hintText: "Enter your name",
                                   hintStyle: TextStyle(
-                                    color: Colors.white,
-                                  ),
+                                      color: isDarkMode
+                                          ? Colors.white
+                                          : Colors.black),
+                                  border: InputBorder.none,
                                 ),
                                 style: TextStyle(
-                                  color: AppColors.blackColor,
-                                ),
+                                    color: isDarkMode
+                                        ? Colors.white
+                                        : Colors.black),
                               ),
                               actions: <Widget>[
                                 TextButton(
-                                  child: const Text('Cancel'),
+                                  child: Text('Cancel',
+                                      style: TextStyle(
+                                          color: isDarkMode
+                                              ? Colors.white
+                                              : Colors.black)),
                                   onPressed: () {
                                     Navigator.of(context).pop();
                                   },
                                 ),
                                 TextButton(
-                                  child: const Text('Save'),
+                                  child: Text('Save',
+                                      style: TextStyle(
+                                          color: isDarkMode
+                                              ? Colors.white
+                                              : Colors.black)),
                                   onPressed: () {
                                     setState(() {
                                       name = newName;

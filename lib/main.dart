@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/adapters.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:taskatii/core/services/local_storage.dart';
 import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
 import 'package:taskatii/core/utils/themes.dart';
 import 'package:taskatii/features/intro/splash_view.dart';
 import 'package:taskatii/core/models/task_model.dart';
-import 'package:taskatii/features/upload/upload_view.dart';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   Hive.registerAdapter(TaskModelAdapter());
   await Hive.openBox('userBox');
@@ -27,11 +27,12 @@ class MainApp extends StatelessWidget {
       builder: (context, userBox, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          themeMode: userBox.get(AppLocalStorage.KIsDarkMode)
-              ? ThemeMode.dark
-              : ThemeMode.light,
-          darkTheme: AppTheme.DarkTheme,
-          theme: AppTheme.LightTheme,
+          themeMode:
+              userBox.get(AppLocalStorage.KIsDarkMode, defaultValue: false)
+                  ? ThemeMode.dark
+                  : ThemeMode.light,
+          darkTheme: AppTheme.darkTheme,
+          theme: AppTheme.lightTheme,
           home: const SplashView(),
         );
       },
