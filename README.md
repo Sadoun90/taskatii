@@ -1,8 +1,8 @@
 <div align="center">
 
-  <img src="assets/logo.json" width="120" height="120" alt="Taskatii Logo" />
+  <img src="https://img.icons8.com/isometric/512/000000/task-completed.png" width="120" height="120" alt="Taskatii Logo" />
 
-  # 🚀 Taskatii (تأسكاتي)
+  # 📌 Taskatii (تاسكاتي)
   ### *Your Ultimate Productivity & Task Management Companion*
 
   [![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev/)
@@ -142,6 +142,8 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
+
 <div align="center">
-  Crafted with ❤️ using <b>Flutter</b>
+   Crafted with ❤️ by <b><a href="https://github.com/Sadoun90">Sadoun</a></b>
+  <br/>
 </div>
