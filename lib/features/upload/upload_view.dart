@@ -1,13 +1,12 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:taskatii/core/functions/navigation.dart';
 import 'package:taskatii/core/services/local_storage.dart';
 import 'package:taskatii/core/utils/colors.dart';
-import 'package:taskatii/core/utils/text_style.dart';
 import 'package:taskatii/core/widgets/CustomButton.dart';
-import 'package:taskatii/features/home/page/home_view.dart';
+import 'package:taskatii/core/widgets/user_avatar.dart';
+import 'package:taskatii/features/main_layout/main_layout.dart';
 
 class UploadView extends StatefulWidget {
   const UploadView({super.key});
@@ -20,6 +19,18 @@ class _UploadViewState extends State<UploadView> {
   String? path;
   String name = '';
 
+  void pickImage(bool isCamera) async {
+    final value = await ImagePicker().pickImage(
+      source: isCamera ? ImageSource.camera : ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (value != null) {
+      setState(() {
+        path = value.path;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -28,17 +39,17 @@ class _UploadViewState extends State<UploadView> {
         actions: [
           TextButton(
             onPressed: () {
-              if (path != null && name.isNotEmpty) {
-                AppLocalStorage.casheData(AppLocalStorage.KName, name);
+              if (path != null && name.trim().isNotEmpty) {
+                AppLocalStorage.casheData(AppLocalStorage.KName, name.trim());
                 AppLocalStorage.casheData(AppLocalStorage.KImage, path);
                 AppLocalStorage.casheData(AppLocalStorage.KIsUpload, true);
-                PushWithReplacement(context, const HomeView());
-              } else if (path == null && name.isNotEmpty) {
+                PushWithReplacement(context, const MainLayout());
+              } else if (path == null && name.trim().isNotEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   backgroundColor: AppColors.redcolor,
                   content: const Text('Please upload your Image'),
                 ));
-              } else if (path != null && name.isEmpty) {
+              } else if (path != null && name.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   backgroundColor: AppColors.redcolor,
                   content: const Text('Please enter your name'),
@@ -55,7 +66,9 @@ class _UploadViewState extends State<UploadView> {
             child: Text(
               'Done',
               style: TextStyle(
-                color: isDarkMode ? Colors.white : Colors.black,
+                color: isDarkMode ? Colors.white : AppColors.primaryColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
             ),
           )
@@ -68,31 +81,27 @@ class _UploadViewState extends State<UploadView> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircleAvatar(
-                  radius: 90,
-                  backgroundImage: (path != null)
-                      ? FileImage(File(path!))
-                      : const NetworkImage(
-                          'https://th.bing.com/th/id/OIP.Wim1Ar6paI5-FdmrOedMMAHaHa?w=191&h=191&c=7&r=0&o=5&dpr=1.3&pid=1.7',
-                        ) as ImageProvider,
+                UserAvatar(
+                  imagePath: path,
+                  radius: 75,
                 ),
-                const Gap(20),
+                const Gap(24),
                 CustomButton(
                   text: 'Upload From Camera',
                   onPressed: () {
                     pickImage(true);
                   },
                 ),
-                const Gap(20),
+                const Gap(12),
                 CustomButton(
                   text: 'Upload From Gallery',
                   onPressed: () {
                     pickImage(false);
                   },
                 ),
-                const Gap(20),
+                const Gap(24),
                 const Divider(),
-                const Gap(20),
+                const Gap(24),
                 TextFormField(
                   onChanged: (value) {
                     setState(() {
@@ -102,20 +111,12 @@ class _UploadViewState extends State<UploadView> {
                   decoration: InputDecoration(
                     hintText: 'Enter Your Name',
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: AppColors.PrimaryColor),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.primaryColor),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: AppColors.PrimaryColor),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: AppColors.redcolor),
-                    ),
-                    focusedErrorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: AppColors.redcolor),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.primaryColor, width: 2),
                     ),
                   ),
                 ),
@@ -125,17 +126,5 @@ class _UploadViewState extends State<UploadView> {
         ),
       ),
     );
-  }
-
-  void pickImage(bool isCamera) {
-    ImagePicker()
-        .pickImage(source: isCamera ? ImageSource.camera : ImageSource.gallery)
-        .then((value) {
-      if (value != null) {
-        setState(() {
-          path = value.path;
-        });
-      }
-    });
   }
 }

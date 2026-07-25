@@ -9,6 +9,16 @@ class AppLocalStorage {
   static String KName = 'name';
   // ignore: non_constant_identifier_names
   static String KImage = 'image';
+  // ignore: non_constant_identifier_names
+  static String KIsGuest = 'isGuest';
+  // ignore: non_constant_identifier_names
+  static String KEmail = 'email';
+  // ignore: non_constant_identifier_names
+  static String KSavedEmail = 'savedEmail';
+  // ignore: non_constant_identifier_names
+  static String KSavedPassword = 'savedPassword';
+  // ignore: non_constant_identifier_names
+  static String KRememberMe = 'rememberMe';
 
   static late Box userBox;
   static late Box<TaskModel> taskBox;
@@ -18,13 +28,15 @@ class AppLocalStorage {
     taskBox = Hive.box('taskBox');
   }
 
-  static casheData(String key, value) {
+  static casheData(String key, dynamic value) {
     userBox.put(key, value);
   }
 
   static getCachedData(String key) {
     return userBox.get(key);
   }
+
+  static bool get isGuest => userBox.get(KIsGuest, defaultValue: true);
 
   static casheTaskData(String key, TaskModel value) {
     taskBox.put(key, value);

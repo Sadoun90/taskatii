@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:taskatii/core/functions/navigation.dart';
-import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
-import 'package:taskatii/core/widgets/CustomButton.dart';
-import 'package:taskatii/features/add_task/add_task.dart';
 
 class TodayHeader extends StatelessWidget {
   const TodayHeader({
@@ -36,12 +32,6 @@ class TodayHeader extends StatelessWidget {
             ],
           ),
         ),
-        CustomButton(
-            width: 140,
-            text: '+ Add Task',
-            onPressed: () {
-              Push(context, const AddTask());
-            })
       ],
     );
   }
