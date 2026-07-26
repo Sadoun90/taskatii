@@ -7,7 +7,6 @@ import 'package:lottie/lottie.dart';
 import 'package:taskatii/core/functions/navigation.dart';
 import 'package:taskatii/core/models/task_model.dart';
 import 'package:taskatii/core/services/local_storage.dart';
-import 'package:taskatii/features/auth/login_view.dart';
 import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
 import 'package:taskatii/core/widgets/task_item.dart';
@@ -47,34 +46,6 @@ class _HomeViewState extends State<HomeView> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primaryColor,
         onPressed: () {
-          if (AppLocalStorage.isGuest) {
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Sign In Required 🔐'),
-                content: const Text(
-                  'You are currently in Guest Mode. Please sign in to add and manage your tasks.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryColor,
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      Push(context, const LoginView());
-                    },
-                    child: const Text('Sign In', style: TextStyle(color: Colors.white)),
-                  ),
-                ],
-              ),
-            );
-            return;
-          }
           Push(context, const AddTask());
         },
         child: const Icon(Icons.add, color: Colors.white),
@@ -224,6 +195,13 @@ class _HomeViewState extends State<HomeView> {
 
                       return matchesSearch && matchesCategory;
                     }).toList();
+
+                    filteredTasks.sort((a, b) {
+                      if (a.isCompleted != b.isCompleted) {
+                        return a.isCompleted ? 1 : -1;
+                      }
+                      return a.startTime.compareTo(b.startTime);
+                    });
 
                     return Column(
                       children: [

@@ -1,65 +1,74 @@
 <div align="center">
 
-
   # 📌 Taskatii (تاسكاتي)
-  ### *Your Ultimate Productivity & Task Management Companion*
+  ### *Your Ultimate Offline-First Productivity & Task Management Companion*
 
   [![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev/)
   [![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev/)
-  [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
   [![Hive](https://img.shields.io/badge/HiveDB-FF6F00?style=for-the-badge&logo=hive&logoColor=white)](https://pub.dev/packages/hive)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
   <p align="center">
-    <b>Taskatii</b> is a modern, beautifully designed task management and productivity application built with <b>Flutter</b>. It combines offline-first local storage via <b>Hive</b> with cloud features via <b>Supabase</b>, providing a seamless task tracking, focus timer, and reminder experience.
+    <b>Taskatii</b> is a modern, fast, and beautifully designed offline task management application built with <b>Flutter</b>. Powered by <b>Hive local storage</b>, it features a live Pomodoro timer, smart task alarms with 6-hour pre-notification, an interactive month-grid calendar with task indicators, optional per-task alarms, and complete data privacy — no sign-in required.
   </p>
 
 </div>
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-### 🔐 Authentication & Guest Mode
-- **Email & Password Authentication**: Powered by Supabase Auth with automatic offline fallback.
-- **Guest Mode**: Full offline usability for users who prefer not to sign up.
-- **Remember Me**: Secure local caching of login state for instant app access.
+### 🚀 Instant 100% Offline Access (No Sign-In Required)
+- **Zero Friction**: Launch straight into your tasks without sign-up forms, logins, or cloud delays.
+- **Permanent Local Storage**: Profile data (names & images) are safely stored in the device's persistent application directory.
+- **4-Second Animated Splash Screen**: A full-screen Lottie animation greets you on launch before navigating to your tasks.
 
-### 📋 Task & Sub-task Management
-- **Sub-tasks Checklist**: Break down complex tasks into smaller actionable steps.
-- **Bidirectional Sync**: Completing all sub-tasks marks the main task complete, and unchecking any sub-task resets it to pending.
-- **Priority Visuals**: Automatic color coding by priority — **High 🔴**, **Medium 🟡**, and **Low 🟢**.
-- **Category Filtering**: Organize tasks into Work, Personal, Study, Health, Shopping, and General.
-- **Undo Task Deletion**: 4-second instant `UNDO` action when deleting any task.
+### 📋 Task & Sub-task Checklist Management
+- **Multi-Task Concurrency**: Add multiple tasks at identical dates or times without conflict — powered by unique microsecond IDs.
+- **Sub-tasks Checklist**: Break down complex tasks into smaller steps with progress indicators (`X/Y Done`).
+- **Priority & Categories**: Priority color-coding (**High 🔴**, **Medium 🟡**, **Low 🟢**) and category tagging (Work, Personal, Study, Health, Shopping, General).
+- **Completed Task Highlighting**: Completed tasks display in a distinct **Emerald Green** color to celebrate progress visually.
+- **Chronological Sorting**: Smart task sorting by start time — pending tasks first, completed last.
+- **Timed Undo on Delete**: Deleting a task shows a floating Undo snackbar that auto-dismisses after **2 seconds**, preventing accidental lingering UI.
 
-### ⏱️ Focus Mode (Pomodoro Timer)
-- **Pomodoro Timer**: Integrated focus timer with customizable minute presets (15, 25, 45, 60 mins).
-- **Task Selector**: Pick any pending task to focus on via a smooth bottom sheet picker.
+### ⏱️ Focus Mode (Pomodoro Timer) & Live Notifications
+- **Pomodoro Timer**: Customizable focus timer presets (15, 25, 45 mins) with optional task attachment.
+- **Live Notification Chronometer**: Displays a real-time countdown timer in the phone's notification status bar while the app runs in the background.
+- **Tap-to-Navigate**: Tapping the live timer notification navigates directly to the Focus (Pomodoro) screen inside the app.
 
-### 📅 Calendar & Timeline Schedule
-- **Date Timeline Picker**: Horizontal date timeline for quick day switching.
-- **Collapsible Calendar**: Full month interactive calendar view with smooth collapse/expand toggling.
+### 🔔 Smart Alarms & Task Notifications
+- **Optional Per-Task Alarms**: Alarms are opt-in per task — tasks only trigger notifications when you explicitly enable the alarm toggle.
+- **6-Hour Pre-Notification**: For tasks scheduled days in advance, the notification triggers **6 hours before** the task's start time, keeping your notification bar clean.
+- **Tap-to-Navigate**: Tapping a task notification navigates directly to that task's details inside the app.
+- **BigTextStyle Formatting**: Highly visible, large bold text and timestamps inside Android notifications shade.
 
-### 🔔 Smart Reminders & Notifications
-- **Scheduled Alarms**: Local push notifications delivered automatically before task start times.
-- **Notification Control**: Automatic cancellation upon task completion or deletion.
+### 📅 Interactive Month-Grid Calendar
+- **Full Month Grid**: A complete month view with navigation arrows (prev/next month) replaces the old horizontal date strip.
+- **Task Dot Indicators**: Days that contain tasks display a colored dot **directly inside the calendar cell** for instant visual overview.
+- **Today Highlight**: Today's date is distinctly highlighted with a border ring even when not selected.
+- **Tap Any Day**: Tapping a day in the grid immediately loads and displays all tasks for that date below.
+- **Productivity Streak Tracker**: Instant overall completion statistics badge in the home header (`🔥 X/Y Done`).
 
-### 📊 Productivity Stats & UX
-- **Interactive Streak Badge**: Live daily progress tracker (`X/Y Tasks Done`) with a stats bottom sheet.
-- **Instant Light & Dark Mode**: Instant theme switching with zero animation lag.
-- **Avatar Preview**: Long-press on user avatar to view a high-res full-screen image preview.
-- **Smart Real-time Search**: Search across task titles, notes, and sub-task steps simultaneously.
+### 👤 Profile & Personalization
+- **Avatar Full-Image Preview**: Long-pressing the profile picture shows the **full image** (uncropped) in a modal with pinch-to-zoom support.
+- **Instant Avatar Updates**: Changing your profile picture immediately clears Flutter's image cache and updates every avatar across the app.
+- **Unique File-per-Upload**: Each new profile photo is saved under a unique timestamped filename; the old file is automatically cleaned up.
+- **Seamless Dark / Light Theme**: Built-in Dark Mode toggle in profile settings, persisted across app restarts.
 
 ---
 
 ## 🛠️ Tech Stack & Architecture
 
-- **Framework**: [Flutter SDK](https://flutter.dev/) (Dart 3.x)
-- **Local Database**: [Hive](https://pub.dev/packages/hive) & [Hive Flutter](https://pub.dev/packages/hive_flutter)
-- **Backend / Auth**: [Supabase Flutter](https://pub.dev/packages/supabase_flutter)
-- **Local Notifications**: [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications)
-- **State & UI Tools**: `ValueListenableBuilder`, `date_picker_timeline`, `lottie`, `google_fonts`, `gap`
-- **Architecture**: Feature-First Clean Architecture
+| Layer | Technology |
+|---|---|
+| **Framework** | [Flutter SDK](https://flutter.dev/) (Dart 3.x) |
+| **Local Database** | [Hive](https://pub.dev/packages/hive) & [Hive Flutter](https://pub.dev/packages/hive_flutter) |
+| **Notifications** | [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications) |
+| **Image Picker** | [image_picker](https://pub.dev/packages/image_picker) |
+| **Animations** | [lottie](https://pub.dev/packages/lottie) |
+| **Storage Path** | [path_provider](https://pub.dev/packages/path_provider) |
+| **Fonts & UI** | `google_fonts`, `gap`, `intl` |
+| **Architecture** | Clean Feature-First Architecture |
 
 ---
 
@@ -70,18 +79,18 @@ lib/
 ├── core/
 │   ├── functions/         # Navigation helpers
 │   ├── models/            # TaskModel & Hive Adapters
-│   ├── services/          # LocalStorage (Hive), Supabase, NotificationService
+│   ├── services/          # LocalStorage (Hive) & NotificationService
 │   ├── utils/             # Colors, TextStyles, App Themes
-│   └── widgets/           # Reusable widgets (UserAvatar, TaskItem)
+│   └── widgets/           # Reusable widgets (UserAvatar, TaskItem, CustomButton)
 └── features/
-    ├── add_task/          # Add & Edit Task view
-    ├── auth/              # Login, Sign Up, Remember Me
-    ├── calendar/          # Calendar & Schedule view
-    ├── focus/             # Focus / Pomodoro view
-    ├── home/              # Main dashboard, Search, Progress stats
-    ├── intro/             # Splash & Onboarding views
+    ├── add_task/          # Add & Edit Task view (with alarm toggle)
+    ├── analytics/         # Productivity Analytics view
+    ├── calendar/          # Interactive Month-Grid Calendar & Schedule view
+    ├── focus/             # Focus / Pomodoro view with Live Notification
+    ├── home/              # Dashboard, Search, Streak stats
+    ├── intro/             # Splash (4s Lottie) & Onboarding views
     ├── main_layout/       # Bottom Navigation Bar Container
-    └── profile/           # User Profile & App Settings
+    └── profile/           # Profile, Avatar, Dark Mode settings
 ```
 
 ---
@@ -91,13 +100,13 @@ lib/
 ### Prerequisites
 - [Flutter SDK](https://flutter.dev/docs/get-started/install) (`>= 3.4.4`)
 - Android Studio / VS Code
-- A physical Android/iOS device or Emulator
+- An Android / iOS device or Emulator
 
 ### Installation
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/YourUsername/taskatii.git
+   git clone https://github.com/Sadoun90/taskatii.git
    cd taskatii
    ```
 
@@ -106,32 +115,10 @@ lib/
    flutter pub get
    ```
 
-3. **Generate Hive Adapters** (if modifying models):
-   ```bash
-   flutter pub run build_runner build --delete-conflicting-outputs
-   ```
-
-4. **Run the app**:
+3. **Run the app**:
    ```bash
    flutter run
    ```
-
-5. **Build Release APK**:
-   ```bash
-   flutter build apk --split-per-abi
-   ```
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! If you find a bug or have a feature request, please open an issue or submit a pull request.
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git file -u origin feature/AmazingFeature`)
-5. Open a Pull Request
 
 ---
 
@@ -141,8 +128,6 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-
 <div align="center">
    Crafted with ❤️ by <b><a href="https://github.com/Sadoun90">Sadoun</a></b>
-  <br/>
 </div>

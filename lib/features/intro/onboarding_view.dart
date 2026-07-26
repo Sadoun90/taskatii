@@ -4,7 +4,6 @@ import 'package:taskatii/core/functions/navigation.dart';
 import 'package:taskatii/core/services/local_storage.dart';
 import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
-import 'package:taskatii/features/auth/login_view.dart';
 import 'package:taskatii/features/main_layout/main_layout.dart';
 
 class OnboardingView extends StatefulWidget {
@@ -41,13 +40,7 @@ class _OnboardingViewState extends State<OnboardingView> {
 
   void _onFinish() {
     AppLocalStorage.casheData(AppLocalStorage.KIsUpload, true);
-    bool isLoggedIn =
-        AppLocalStorage.getCachedData(AppLocalStorage.KName) != null;
-    if (isLoggedIn) {
-      PushWithReplacement(context, const MainLayout());
-    } else {
-      PushWithReplacement(context, const LoginView());
-    }
+    PushWithReplacement(context, const MainLayout());
   }
 
   @override
@@ -335,8 +328,8 @@ class _OnboardingViewState extends State<OnboardingView> {
               alignment: Alignment.center,
               children: [
                 SizedBox(
-                  height: 90,
-                  width: 90,
+                  height: 100,
+                  width: 100,
                   child: CircularProgressIndicator(
                     value: 0.8,
                     strokeWidth: 8,

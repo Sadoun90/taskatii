@@ -5,7 +5,6 @@ import 'package:taskatii/core/functions/navigation.dart';
 import 'package:taskatii/core/services/local_storage.dart';
 import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
-import 'package:taskatii/features/auth/login_view.dart';
 import 'package:taskatii/features/main_layout/main_layout.dart';
 import 'package:taskatii/features/intro/onboarding_view.dart';
 
@@ -26,15 +25,12 @@ class _SplashViewState extends State<SplashView> {
 
       bool isUpload =
           AppLocalStorage.getCachedData(AppLocalStorage.KIsUpload) ?? false;
-      bool isGuest = AppLocalStorage.isGuest;
 
       if (!isUpload) {
+        // First launch: show onboarding
         PushWithReplacement(context, const OnboardingView());
-      } else if (isGuest) {
-        // If guest or not signed in, force LoginView so user can choose to sign in or continue as guest
-        PushWithReplacement(context, const LoginView());
       } else {
-        // Logged-in user: go straight to MainLayout
+        // Already onboarded: go directly to the app — no login needed
         PushWithReplacement(context, const MainLayout());
       }
     });

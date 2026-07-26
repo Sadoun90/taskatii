@@ -7,9 +7,18 @@ import 'package:taskatii/features/focus/focus_view.dart';
 import 'package:taskatii/features/home/page/home_view.dart';
 import 'package:taskatii/features/profile/profile_view.dart';
 
+import 'package:taskatii/core/models/task_model.dart';
+import 'package:taskatii/features/home/widgets/task_details_sheet.dart';
+
 class MainLayout extends StatefulWidget {
   final int initialIndex;
-  const MainLayout({super.key, this.initialIndex = 0});
+  final TaskModel? targetTask;
+
+  const MainLayout({
+    super.key,
+    this.initialIndex = 0,
+    this.targetTask,
+  });
 
   @override
   State<MainLayout> createState() => _MainLayoutState();
@@ -31,6 +40,18 @@ class _MainLayoutState extends State<MainLayout> {
   void initState() {
     super.initState();
     currentIndex = widget.initialIndex;
+
+    if (widget.targetTask != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => TaskDetailsSheet(task: widget.targetTask!),
+        );
+      });
+    }
   }
 
   @override

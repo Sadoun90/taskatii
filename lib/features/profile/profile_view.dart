@@ -1,15 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:taskatii/core/functions/navigation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:taskatii/core/models/task_model.dart';
 import 'package:taskatii/core/services/local_storage.dart';
-import 'package:taskatii/core/services/supabase_service.dart';
 import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
 import 'package:taskatii/core/widgets/user_avatar.dart';
-import 'package:taskatii/features/auth/login_view.dart';
 
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
@@ -26,7 +25,26 @@ class _ProfileViewState extends State<ProfileView> {
         imageQuality: 85,
       );
       if (pickedFile != null) {
-        AppLocalStorage.casheData(AppLocalStorage.KImage, pickedFile.path);
+        final appDir = await getApplicationDocumentsDirectory();
+        final ext = pickedFile.path.contains('.') ? pickedFile.path.split('.').last : 'png';
+        final newPath = '${appDir.path}/avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+        // Clean up old avatar file if present
+        String? oldPath = AppLocalStorage.getCachedData(AppLocalStorage.KImage);
+        if (oldPath != null) {
+          try {
+            final oldFile = File(oldPath);
+            if (oldFile.existsSync()) oldFile.deleteSync();
+          } catch (_) {}
+        }
+
+        final permanentFile = await File(pickedFile.path).copy(newPath);
+
+        // Clear image cache so Flutter renders the newly selected profile image immediately
+        PaintingBinding.instance.imageCache.clear();
+        PaintingBinding.instance.imageCache.clearLiveImages();
+
+        AppLocalStorage.casheData(AppLocalStorage.KImage, permanentFile.path);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profile picture updated successfully!')),
@@ -145,52 +163,6 @@ class _ProfileViewState extends State<ProfileView> {
     );
   }
 
-  void _showSignOutConfirmation(BuildContext context) {
-    bool isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? Colors.grey.shade900 : Colors.white,
-        title: Row(
-          children: [
-            Icon(Icons.logout, color: AppColors.redcolor),
-            const Gap(8),
-            Text(
-              'Sign Out',
-              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-            ),
-          ],
-        ),
-        content: Text(
-          'Are you sure you want to sign out?',
-          style: TextStyle(color: isDark ? Colors.white70 : Colors.black87),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.redcolor,
-            ),
-            onPressed: () async {
-              Navigator.pop(context);
-              await SupabaseService.signOut();
-              AppLocalStorage.casheData(AppLocalStorage.KIsGuest, true);
-              // Always preserve KName and KImage for next login
-              if (context.mounted) {
-                PushAndRemoveUntil(context, const LoginView());
-              }
-            },
-            child: const Text('Sign Out', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   BoxDecoration _cardDecoration(bool isDarkMode) {
     return BoxDecoration(
       color: isDarkMode ? Colors.grey.shade900 : Colors.white,
@@ -212,18 +184,13 @@ class _ProfileViewState extends State<ProfileView> {
 
   @override
   Widget build(BuildContext context) {
+    bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return ValueListenableBuilder(
       valueListenable: AppLocalStorage.userBox.listenable(),
       builder: (context, box, child) {
         String name = AppLocalStorage.getCachedData(AppLocalStorage.KName) ?? '';
         String? imagePath = AppLocalStorage.getCachedData(AppLocalStorage.KImage);
-        bool isDarkMode =
-            AppLocalStorage.getCachedData(AppLocalStorage.KIsDarkMode) ?? false;
-
-        bool isGuest = AppLocalStorage.isGuest;
-        bool isSignedIn = !isGuest;
-        String? email = AppLocalStorage.getCachedData(AppLocalStorage.KEmail) ??
-            SupabaseService.currentUserEmail;
 
         return Scaffold(
           appBar: AppBar(
@@ -232,18 +199,6 @@ class _ProfileViewState extends State<ProfileView> {
               'Profile Settings',
               style: getTitleTextStyle(context, color: AppColors.primaryColor),
             ),
-            actions: [
-              IconButton(
-                onPressed: () {
-                  AppLocalStorage.casheData(
-                      AppLocalStorage.KIsDarkMode, !isDarkMode);
-                },
-                icon: Icon(
-                  isDarkMode ? Icons.light_mode : Icons.dark_mode,
-                  color: AppColors.primaryColor,
-                ),
-              ),
-            ],
           ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -294,13 +249,6 @@ class _ProfileViewState extends State<ProfileView> {
                     color: isDarkMode ? Colors.white : Colors.black87,
                   ),
                 ),
-                if (email != null && email.isNotEmpty) ...[
-                  const Gap(4),
-                  Text(
-                    email,
-                    style: getSmallTextStyle(color: Colors.grey),
-                  ),
-                ],
                 const Gap(24),
 
                 // User Name Edit Card
@@ -340,64 +288,44 @@ class _ProfileViewState extends State<ProfileView> {
                     ],
                   ),
                 ),
-                const Gap(14),
+                const Gap(16),
 
-                const Gap(14),
-
-                // Account Status Card - ONLY shown for guests
-                if (!isSignedIn) ...[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: _cardDecoration(isDarkMode),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.no_accounts_outlined,
-                          color: Colors.orange,
-                          size: 26,
-                        ),
-                        const Gap(12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Guest Mode",
-                                style: getTitleTextStyle(
-                                  context,
-                                  fontSize: 15,
-                                  color: isDarkMode ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                              Text(
-                                "Sign in to save and sync your tasks",
-                                style: getSmallTextStyle(color: Colors.grey, fontSize: 12),
-                              ),
-                            ],
+                // Dark/Light Theme Mode Card
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: _cardDecoration(isDarkMode),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                            color: AppColors.primaryColor,
                           ),
-                        ),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryColor,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                          const Gap(12),
+                          Text(
+                            "Dark Mode",
+                            style: getTitleTextStyle(
+                              context,
+                              fontSize: 15,
+                              color: isDarkMode ? Colors.white : Colors.black87,
                             ),
                           ),
-                          onPressed: () {
-                            Push(context, const LoginView());
-                          },
-                          child: const Text(
-                            "Sign In",
-                            style: TextStyle(color: Colors.white, fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                      Switch(
+                        value: isDarkMode,
+                        activeTrackColor: AppColors.primaryColor,
+                        onChanged: (val) {
+                          AppLocalStorage.casheData(
+                              AppLocalStorage.KIsDarkMode, val);
+                        },
+                      ),
+                    ],
                   ),
-                  const Gap(14),
-                ],
+                ),
+                const Gap(16),
 
                 // App Info & Statistics Card
                 ValueListenableBuilder(
@@ -436,32 +364,6 @@ class _ProfileViewState extends State<ProfileView> {
                   },
                 ),
                 const Gap(24),
-
-                // Prominent Sign Out Button - only if signed in
-                if (isSignedIn)
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: AppColors.redcolor),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      onPressed: () => _showSignOutConfirmation(context),
-                      icon: Icon(Icons.logout, color: AppColors.redcolor),
-                      label: Text(
-                        "Sign Out",
-                        style: TextStyle(
-                          color: AppColors.redcolor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                  ),
-                const Gap(20),
               ],
             ),
           ),

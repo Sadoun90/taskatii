@@ -7,6 +7,8 @@ import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
 import 'package:taskatii/features/add_task/add_task.dart';
 
+import 'package:taskatii/features/focus/focus_view.dart';
+
 class TaskDetailsSheet extends StatefulWidget {
   final TaskModel task;
 
@@ -258,12 +260,19 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
                     final messenger = ScaffoldMessenger.of(context);
 
                     NotificationService.cancelNotification(deletedTask.notificationId);
+                    if (FocusTimerController.selectedTask?.id == deletedTask.id) {
+                      FocusTimerController.cancelTimer();
+                    }
                     AppLocalStorage.taskBox.delete(deletedTask.id);
                     Navigator.pop(context);
 
+                    messenger.clearSnackBars();
                     messenger.showSnackBar(
                       SnackBar(
-                        duration: const Duration(seconds: 4),
+                        behavior: SnackBarBehavior.floating,
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        duration: const Duration(seconds: 2),
                         backgroundColor: Colors.black87,
                         content: const Text(
                           'Task deleted 🗑️',
@@ -273,9 +282,11 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
                           label: 'UNDO',
                           textColor: Colors.orangeAccent,
                           onPressed: () {
+                            messenger.hideCurrentSnackBar();
                             AppLocalStorage.casheTaskData(
                                 deletedTask.id, deletedTask);
-                            if (!deletedTask.isCompleted) {
+                            if (!deletedTask.isCompleted &&
+                                deletedTask.notificationId != null) {
                               NotificationService.scheduleTaskNotification(
                                   deletedTask);
                             }
@@ -283,6 +294,11 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
                         ),
                       ),
                     );
+
+                    // Explicit 2-second safety timer to guarantee SnackBar auto-dismisses
+                    Future.delayed(const Duration(seconds: 2), () {
+                      messenger.hideCurrentSnackBar();
+                    });
                   },
                   icon: const Icon(Icons.delete, color: Colors.red),
                 ),

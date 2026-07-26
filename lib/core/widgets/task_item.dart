@@ -61,7 +61,7 @@ class TaskItemWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     Color cardColor;
     if (model.isCompleted) {
-      cardColor = Colors.grey.shade600;
+      cardColor = const Color(0xFF10B981); // Modern Emerald Green for completed tasks
     } else {
       int prio = model.priority ?? model.color;
       switch (prio) {

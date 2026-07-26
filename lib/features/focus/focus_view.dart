@@ -4,8 +4,107 @@ import 'package:gap/gap.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:taskatii/core/models/task_model.dart';
 import 'package:taskatii/core/services/local_storage.dart';
+import 'package:taskatii/core/services/notification_service.dart';
 import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
+
+class FocusTimerController {
+  static int totalSeconds = 25 * 60; // 25 mins default
+  static int initialSeconds = 25 * 60;
+  static Timer? timer;
+  static bool isRunning = false;
+  static DateTime? endTime;
+  static TaskModel? selectedTask;
+  static int completedSessions = 0;
+
+  static final List<void Function()> _listeners = [];
+
+  static void addListener(void Function() listener) {
+    if (!_listeners.contains(listener)) {
+      _listeners.add(listener);
+    }
+  }
+
+  static void removeListener(void Function() listener) {
+    _listeners.remove(listener);
+  }
+
+  static void _notifyListeners() {
+    for (final listener in List<void Function()>.from(_listeners)) {
+      listener();
+    }
+  }
+
+  static void checkSelectedTaskValid() {
+    if (selectedTask != null) {
+      final exists = AppLocalStorage.taskBox.containsKey(selectedTask!.id);
+      if (!exists) {
+        cancelTimer();
+        selectedTask = null;
+        _notifyListeners();
+      }
+    }
+  }
+
+  static void startTimer() {
+    timer?.cancel();
+    isRunning = true;
+    endTime = DateTime.now().add(Duration(seconds: totalSeconds));
+
+    NotificationService.scheduleFocusEndNotification(
+      durationSeconds: totalSeconds,
+      taskTitle: selectedTask?.title,
+    );
+
+    timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (endTime == null) return;
+      final diff = endTime!.difference(DateTime.now()).inSeconds;
+      if (diff > 0) {
+        totalSeconds = diff;
+        _notifyListeners();
+      } else {
+        t.cancel();
+        isRunning = false;
+        completedSessions++;
+        totalSeconds = initialSeconds;
+        endTime = null;
+        _notifyListeners();
+
+        NotificationService.showFocusCompleteNotification(
+          taskTitle: selectedTask?.title,
+        );
+      }
+    });
+    _notifyListeners();
+  }
+
+  static void pauseTimer() {
+    timer?.cancel();
+    isRunning = false;
+    endTime = null;
+    NotificationService.cancelFocusNotification();
+    _notifyListeners();
+  }
+
+  static void cancelTimer() {
+    timer?.cancel();
+    isRunning = false;
+    endTime = null;
+    totalSeconds = initialSeconds;
+    NotificationService.cancelFocusNotification();
+    _notifyListeners();
+  }
+
+  static void setDuration(int minutes) {
+    timer?.cancel();
+    initialSeconds = minutes * 60;
+    totalSeconds = initialSeconds;
+    isRunning = false;
+    endTime = null;
+    NotificationService.cancelFocusNotification();
+    _notifyListeners();
+  }
+}
 
 class FocusView extends StatefulWidget {
   const FocusView({super.key});
@@ -15,82 +114,44 @@ class FocusView extends StatefulWidget {
 }
 
 class _FocusViewState extends State<FocusView> {
-  int totalSeconds = 25 * 60; // 25 mins default
-  int initialSeconds = 25 * 60;
-  Timer? timer;
-  bool isRunning = false;
-  TaskModel? selectedTask;
-  int completedSessions = 0;
+  @override
+  void initState() {
+    super.initState();
+    FocusTimerController.addListener(_onTimerStateChanged);
+    FocusTimerController.checkSelectedTaskValid();
 
-  void startTimer() {
-    if (timer != null) timer!.cancel();
-    setState(() {
-      isRunning = true;
-    });
-
-    timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (totalSeconds > 0) {
-        setState(() {
-          totalSeconds--;
-        });
+    // Recalculate remaining seconds if timer is running in background
+    if (FocusTimerController.isRunning && FocusTimerController.endTime != null) {
+      final remaining = FocusTimerController.endTime!.difference(DateTime.now()).inSeconds;
+      if (remaining > 0) {
+        FocusTimerController.totalSeconds = remaining;
       } else {
-        t.cancel();
-        setState(() {
-          isRunning = false;
-          completedSessions++;
-          totalSeconds = initialSeconds;
-        });
-
-        // Show completion snackbar
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Colors.green,
-              content: Text('🎉 Focus session completed! Take a 5-minute break.'),
-            ),
-          );
-        }
+        FocusTimerController.cancelTimer();
       }
-    });
-  }
-
-  void pauseTimer() {
-    if (timer != null) timer!.cancel();
-    setState(() {
-      isRunning = false;
-    });
-  }
-
-  void resetTimer() {
-    if (timer != null) timer!.cancel();
-    setState(() {
-      isRunning = false;
-      totalSeconds = initialSeconds;
-    });
-  }
-
-  void setDuration(int minutes) {
-    if (timer != null) timer!.cancel();
-    setState(() {
-      initialSeconds = minutes * 60;
-      totalSeconds = initialSeconds;
-      isRunning = false;
-    });
+    }
   }
 
   @override
   void dispose() {
-    timer?.cancel();
+    FocusTimerController.removeListener(_onTimerStateChanged);
     super.dispose();
   }
 
-  String get minutesString =>
-      (totalSeconds ~/ 60).toString().padLeft(2, '0');
-  String get secondsString =>
-      (totalSeconds % 60).toString().padLeft(2, '0');
+  void _onTimerStateChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
-  double get progress =>
-      initialSeconds > 0 ? (initialSeconds - totalSeconds) / initialSeconds : 0;
+  String get minutesString =>
+      (FocusTimerController.totalSeconds ~/ 60).toString().padLeft(2, '0');
+  String get secondsString =>
+      (FocusTimerController.totalSeconds % 60).toString().padLeft(2, '0');
+
+  double get progress => FocusTimerController.initialSeconds > 0
+      ? (FocusTimerController.initialSeconds - FocusTimerController.totalSeconds) /
+          FocusTimerController.initialSeconds
+      : 0;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +183,7 @@ class _FocusViewState extends State<FocusView> {
                       if (pendingTasks.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
+                            duration: Duration(seconds: 2),
                             content: Text('No pending tasks. Add a task first!'),
                           ),
                         );
@@ -168,7 +230,7 @@ class _FocusViewState extends State<FocusView> {
                                     ),
                                     onTap: () {
                                       setState(() {
-                                        selectedTask = t;
+                                        FocusTimerController.selectedTask = t;
                                       });
                                       Navigator.pop(ctx);
                                     },
@@ -196,7 +258,7 @@ class _FocusViewState extends State<FocusView> {
                         children: [
                           Icon(
                             Icons.task_alt,
-                            color: selectedTask != null
+                            color: FocusTimerController.selectedTask != null
                                 ? AppColors.primaryColor
                                 : Colors.grey,
                             size: 20,
@@ -204,11 +266,11 @@ class _FocusViewState extends State<FocusView> {
                           const Gap(10),
                           Expanded(
                             child: Text(
-                              selectedTask?.title ??
+                              FocusTimerController.selectedTask?.title ??
                                   'Tap to select a task to focus on...',
                               style: getBodyTextStyle(
                                 context,
-                                color: selectedTask != null
+                                color: FocusTimerController.selectedTask != null
                                     ? (isDark ? Colors.white : Colors.black87)
                                     : Colors.grey,
                               ),
@@ -227,14 +289,14 @@ class _FocusViewState extends State<FocusView> {
               ),
               const Gap(24),
 
-
               // Duration Preset Chips
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [15, 25, 45].map((mins) {
-                    bool isSelected = initialSeconds == mins * 60;
+                    bool isSelected =
+                        FocusTimerController.initialSeconds == mins * 60;
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: ChoiceChip(
@@ -242,10 +304,13 @@ class _FocusViewState extends State<FocusView> {
                         selected: isSelected,
                         selectedColor: AppColors.primaryColor,
                         labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : (isDark ? Colors.white : Colors.black),
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected
+                              ? Colors.white
+                              : (isDark ? Colors.white : Colors.black),
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
-                        onSelected: (_) => setDuration(mins),
+                        onSelected: (_) => FocusTimerController.setDuration(mins),
                       ),
                     );
                   }).toList(),
@@ -284,7 +349,9 @@ class _FocusViewState extends State<FocusView> {
                       ),
                       const Gap(6),
                       Text(
-                        isRunning ? 'STAY FOCUSED 🔥' : 'READY TO START',
+                        FocusTimerController.isRunning
+                            ? 'STAY FOCUSED 🔥'
+                            : 'READY TO START',
                         style: getSmallTextStyle(
                           color: AppColors.primaryColor,
                           fontSize: 12,
@@ -301,7 +368,7 @@ class _FocusViewState extends State<FocusView> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton.filled(
-                    onPressed: resetTimer,
+                    onPressed: FocusTimerController.cancelTimer,
                     iconSize: 28,
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.grey.shade400,
@@ -311,10 +378,13 @@ class _FocusViewState extends State<FocusView> {
                   ),
                   const Gap(20),
                   ElevatedButton(
-                    onPressed: isRunning ? pauseTimer : startTimer,
+                    onPressed: FocusTimerController.isRunning
+                        ? FocusTimerController.pauseTimer
+                        : FocusTimerController.startTimer,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          isRunning ? Colors.orange : AppColors.primaryColor,
+                      backgroundColor: FocusTimerController.isRunning
+                          ? Colors.orange
+                          : AppColors.primaryColor,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 40, vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -325,13 +395,15 @@ class _FocusViewState extends State<FocusView> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          isRunning ? Icons.pause : Icons.play_arrow,
+                          FocusTimerController.isRunning
+                              ? Icons.pause
+                              : Icons.play_arrow,
                           color: Colors.white,
                           size: 28,
                         ),
                         const Gap(8),
                         Text(
-                          isRunning ? 'PAUSE' : 'START',
+                          FocusTimerController.isRunning ? 'PAUSE' : 'START',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -361,7 +433,7 @@ class _FocusViewState extends State<FocusView> {
                     Column(
                       children: [
                         Text(
-                          '$completedSessions',
+                          '${FocusTimerController.completedSessions}',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -379,7 +451,7 @@ class _FocusViewState extends State<FocusView> {
                     Column(
                       children: [
                         Text(
-                          '${completedSessions * (initialSeconds ~/ 60)}m',
+                          '${FocusTimerController.completedSessions * (FocusTimerController.initialSeconds ~/ 60)}m',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,

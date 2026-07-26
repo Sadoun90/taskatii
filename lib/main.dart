@@ -3,7 +3,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:taskatii/core/models/task_model.dart';
 import 'package:taskatii/core/services/local_storage.dart';
 import 'package:taskatii/core/services/notification_service.dart';
-import 'package:taskatii/core/services/supabase_service.dart';
 import 'package:taskatii/core/utils/themes.dart';
 import 'package:taskatii/features/intro/splash_view.dart';
 
@@ -15,10 +14,10 @@ Future<void> main() async {
   await Hive.openBox<TaskModel>('taskBox');
   AppLocalStorage.init();
 
-  await NotificationService.init();
-  await SupabaseService.init();
-
   runApp(const MainApp());
+
+  // Initialize notifications asynchronously in the background
+  NotificationService.init();
 }
 
 class MainApp extends StatefulWidget {
@@ -60,6 +59,7 @@ class _MainAppState extends State<MainApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: NotificationService.navigatorKey,
       debugShowCheckedModeBanner: false,
       themeMode: _isDark ? ThemeMode.dark : ThemeMode.light,
       darkTheme: AppTheme.darkTheme,

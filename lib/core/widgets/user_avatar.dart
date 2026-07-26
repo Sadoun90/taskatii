@@ -39,36 +39,49 @@ class UserAvatar extends StatelessWidget {
       barrierDismissible: true,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(20),
+        insetPadding: const EdgeInsets.all(16),
         child: GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 4),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                child: CircleAvatar(
-                  radius: 120,
-                  backgroundColor: AppColors.primaryColor,
-                  backgroundImage:
-                      hasValidImage ? FileImage(File(imagePath!)) : null,
-                  child: !hasValidImage
-                      ? const Icon(
-                          Icons.person,
-                          size: 130,
-                          color: Colors.white,
-                        )
-                      : null,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.7,
+                    maxWidth: MediaQuery.of(context).size.width * 0.9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        blurRadius: 25,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: InteractiveViewer(
+                    panEnabled: true,
+                    minScale: 0.8,
+                    maxScale: 4.0,
+                    child: hasValidImage
+                        ? Image.file(
+                            File(imagePath!),
+                            fit: BoxFit.contain,
+                          )
+                        : const Padding(
+                            padding: EdgeInsets.all(40.0),
+                            child: Icon(
+                              Icons.person,
+                              size: 150,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -76,7 +89,7 @@ class UserAvatar extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.black54,
+                  color: Colors.black.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(

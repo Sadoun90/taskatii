@@ -169,26 +169,15 @@ class HomeHeaderWidget extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.local_fire_department_rounded,
-                          size: 16,
-                          color: Colors.amberAccent,
-                        ),
-                        const Gap(6),
-                        Text(
-                          totalTasks > 0
-                              ? '$completedTasks/$totalTasks Done'
-                              : '🔥 Streak',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      totalTasks > 0
+                          ? '🔥 $completedTasks/$totalTasks Done'
+                          : '🔥 Streak',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),

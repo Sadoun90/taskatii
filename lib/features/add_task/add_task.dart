@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
@@ -45,6 +44,8 @@ class _AddTaskState extends State<AddTask> {
 
   final List<String> repeatOptions = ['None', 'Daily', 'Weekly', 'Monthly'];
 
+  bool isReminderEnabled = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +59,7 @@ class _AddTaskState extends State<AddTask> {
       selectedCategory = t.category ?? 'General';
       selectedPriority = t.priority ?? 1;
       selectedRepeat = t.isRepeat ?? 'None';
+      isReminderEnabled = t.notificationId != null;
       if (t.subTasks != null) {
         subTasks = List<String>.from(t.subTasks!);
         subTasksCompleted = t.subTasksCompleted != null
@@ -479,6 +481,80 @@ class _AddTaskState extends State<AddTask> {
               ),
               const Gap(20),
 
+              // Enable Alarm Notification Toggle Card
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isReminderEnabled
+                        ? AppColors.primaryColor
+                        : (isDark ? Colors.grey.shade800 : Colors.grey.shade300),
+                    width: isReminderEnabled ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            isReminderEnabled
+                                ? Icons.notifications_active_rounded
+                                : Icons.notifications_off_outlined,
+                            color: isReminderEnabled
+                                ? AppColors.primaryColor
+                                : Colors.grey,
+                          ),
+                          const Gap(10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Task Alarm Notification 🔔',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: getTitleTextStyle(
+                                    context,
+                                    fontSize: 13,
+                                    color: isDark ? Colors.white : Colors.black87,
+                                  ),
+                                ),
+                                Text(
+                                  isReminderEnabled
+                                      ? 'Alarm enabled for this task'
+                                      : 'No alarm (optional)',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: getSmallTextStyle(
+                                    color: isReminderEnabled
+                                        ? AppColors.primaryColor
+                                        : Colors.grey,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Gap(8),
+                    Switch(
+                      value: isReminderEnabled,
+                      activeTrackColor: AppColors.primaryColor,
+                      onChanged: (val) {
+                        setState(() {
+                          isReminderEnabled = val;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const Gap(20),
+
               // Save / Update Button
               SizedBox(
                 width: double.infinity,
@@ -512,9 +588,17 @@ class _AddTaskState extends State<AddTask> {
                         ? widget.task!.id
                         : '${titleController.text}-${DateTime.now().millisecondsSinceEpoch}';
 
-                    int notifId = isEditMode && widget.task!.notificationId != null
-                        ? widget.task!.notificationId!
-                        : Random().nextInt(1000000);
+                    int? notifId;
+                    if (isReminderEnabled) {
+                      notifId = isEditMode && widget.task!.notificationId != null
+                          ? widget.task!.notificationId!
+                          : (DateTime.now().microsecondsSinceEpoch % 2147483647);
+                    } else {
+                      notifId = null;
+                      if (isEditMode && widget.task!.notificationId != null) {
+                        NotificationService.cancelNotification(widget.task!.notificationId);
+                      }
+                    }
 
                     TaskModel model = TaskModel(
                       id: id,
@@ -534,7 +618,11 @@ class _AddTaskState extends State<AddTask> {
                     );
 
                     AppLocalStorage.casheTaskData(id, model);
-                    NotificationService.scheduleTaskNotification(model);
+
+                    if (isReminderEnabled) {
+                      NotificationService.scheduleTaskNotification(model);
+                    }
+
                     Navigator.pop(context);
                   },
                   child: Text(
