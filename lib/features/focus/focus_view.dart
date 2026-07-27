@@ -35,6 +35,9 @@ class FocusTimerController {
     }
   }
 
+  /// Public wrapper to notify all UI listeners (e.g., from BottomSheets)
+  static void notifyAll() => _notifyListeners();
+
   static void checkSelectedTaskValid() {
     if (selectedTask != null) {
       final exists = AppLocalStorage.taskBox.containsKey(selectedTask!.id);
@@ -46,12 +49,14 @@ class FocusTimerController {
     }
   }
 
-  static void startTimer() {
+  static Future<void> startTimer() async {
     timer?.cancel();
     isRunning = true;
     endTime = DateTime.now().add(Duration(seconds: totalSeconds));
 
-    NotificationService.scheduleFocusEndNotification(
+    await NotificationService.requestNotificationPermission();
+
+    await NotificationService.scheduleFocusEndNotification(
       durationSeconds: totalSeconds,
       taskTitle: selectedTask?.title,
     );
@@ -218,20 +223,79 @@ class _FocusViewState extends State<FocusView> {
                                   style: getTitleTextStyle(context, fontSize: 16),
                                 ),
                                 const Gap(12),
+                                // None / General Focus Option to reset task selection
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.remove_circle_outline,
+                                    color: Colors.redAccent,
+                                  ),
+                                  title: Text(
+                                    'None (General Focus Timer)',
+                                    style: getBodyTextStyle(
+                                      context,
+                                      color: FocusTimerController.selectedTask == null
+                                          ? Colors.redAccent
+                                          : (isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600),
+                                    ),
+                                  ),
+                                  onTap: () {
+                                    FocusTimerController.selectedTask = null;
+                                    if (FocusTimerController.isRunning &&
+                                        FocusTimerController.endTime != null) {
+                                      int remaining = FocusTimerController.endTime!
+                                          .difference(DateTime.now())
+                                          .inSeconds;
+                                      if (remaining > 0) {
+                                        NotificationService.scheduleFocusEndNotification(
+                                          durationSeconds: remaining,
+                                          taskTitle: null,
+                                        );
+                                      }
+                                    }
+                                    FocusTimerController.notifyAll();
+                                    Navigator.pop(ctx);
+                                  },
+                                ),
+                                const Divider(height: 12),
                                 ...pendingTasks.map((t) {
+                                  final bool isChosen =
+                                      FocusTimerController.selectedTask?.id == t.id;
                                   return ListTile(
                                     leading: Icon(
-                                      Icons.radio_button_unchecked,
+                                      isChosen
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_unchecked,
                                       color: AppColors.primaryColor,
                                     ),
                                     title: Text(
                                       t.title,
-                                      style: getBodyTextStyle(context),
+                                      style: getBodyTextStyle(
+                                        context,
+                                        color: isChosen
+                                            ? AppColors.primaryColor
+                                            : (Theme.of(context).brightness ==
+                                                    Brightness.dark
+                                                ? Colors.white
+                                                : Colors.black87),
+                                      ),
                                     ),
                                     onTap: () {
-                                      setState(() {
-                                        FocusTimerController.selectedTask = t;
-                                      });
+                                      FocusTimerController.selectedTask = t;
+                                      if (FocusTimerController.isRunning &&
+                                          FocusTimerController.endTime != null) {
+                                        int remaining = FocusTimerController.endTime!
+                                            .difference(DateTime.now())
+                                            .inSeconds;
+                                        if (remaining > 0) {
+                                          NotificationService.scheduleFocusEndNotification(
+                                            durationSeconds: remaining,
+                                            taskTitle: t.title,
+                                          );
+                                        }
+                                      }
+                                      FocusTimerController.notifyAll();
                                       Navigator.pop(ctx);
                                     },
                                   );
@@ -277,10 +341,42 @@ class _FocusViewState extends State<FocusView> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          Icon(
-                            Icons.keyboard_arrow_down,
-                            color: AppColors.primaryColor,
-                          ),
+                          if (FocusTimerController.selectedTask != null)
+                            InkWell(
+                              onTap: () {
+                                FocusTimerController.selectedTask = null;
+                                if (FocusTimerController.isRunning &&
+                                    FocusTimerController.endTime != null) {
+                                  int remaining = FocusTimerController.endTime!
+                                      .difference(DateTime.now())
+                                      .inSeconds;
+                                  if (remaining > 0) {
+                                    NotificationService.scheduleFocusEndNotification(
+                                      durationSeconds: remaining,
+                                      taskTitle: null,
+                                    );
+                                  }
+                                }
+                                FocusTimerController.notifyAll();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent.withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.close_rounded,
+                                  color: Colors.redAccent,
+                                  size: 18,
+                                ),
+                              ),
+                            )
+                          else
+                            Icon(
+                              Icons.keyboard_arrow_down,
+                              color: AppColors.primaryColor,
+                            ),
                         ],
                       ),
                     ),

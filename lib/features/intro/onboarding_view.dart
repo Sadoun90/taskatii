@@ -360,7 +360,7 @@ class _OnboardingViewState extends State<OnboardingView> {
             ),
             const Gap(16),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: AppColors.greenColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
@@ -370,12 +370,16 @@ class _OnboardingViewState extends State<OnboardingView> {
                 children: [
                   Icon(Icons.stars_rounded, color: AppColors.greenColor, size: 18),
                   const Gap(6),
-                  Text(
-                    "4 of 5 Tasks Completed Today! 🎉",
-                    style: TextStyle(
-                      color: AppColors.greenColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                  Flexible(
+                    child: Text(
+                      "4 of 5 Tasks Completed Today! 🎉",
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: AppColors.greenColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11.5,
+                      ),
                     ),
                   ),
                 ],

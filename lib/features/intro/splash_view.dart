@@ -3,6 +3,7 @@ import 'package:gap/gap.dart';
 import 'package:lottie/lottie.dart';
 import 'package:taskatii/core/functions/navigation.dart';
 import 'package:taskatii/core/services/local_storage.dart';
+import 'package:taskatii/core/services/notification_service.dart';
 import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
 import 'package:taskatii/features/main_layout/main_layout.dart';
@@ -20,7 +21,7 @@ class _SplashViewState extends State<SplashView> {
   void initState() {
     super.initState();
 
-    Future.delayed(const Duration(milliseconds: 4000), () {
+    Future.delayed(const Duration(milliseconds: 4000), () async {
       if (!mounted) return;
 
       bool isUpload =
@@ -30,8 +31,16 @@ class _SplashViewState extends State<SplashView> {
         // First launch: show onboarding
         PushWithReplacement(context, const OnboardingView());
       } else {
-        // Already onboarded: go directly to the app — no login needed
-        PushWithReplacement(context, const MainLayout());
+        // Check if app was launched by tapping a notification
+        final launchDetails =
+            await NotificationService.getAppLaunchNotificationDetails();
+        if (launchDetails != null && launchDetails.payload != null) {
+          NotificationService.handleNotificationPayload(launchDetails.payload);
+        } else {
+          if (mounted) {
+            PushWithReplacement(context, const MainLayout());
+          }
+        }
       }
     });
   }

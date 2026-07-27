@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:taskatii/core/models/task_model.dart';
+import 'package:taskatii/core/services/notification_service.dart';
 import 'package:taskatii/core/utils/colors.dart';
 import 'package:taskatii/core/utils/text_style.dart';
 
@@ -13,6 +14,27 @@ class TaskItemWidget extends StatelessWidget {
     required this.model,
     this.onTap,
   });
+
+  bool _isTaskOverdue(TaskModel task) {
+    if (task.isCompleted) return false;
+    final scheduledDate =
+        NotificationService.parseTaskDateTime(task.date, task.startTime);
+    if (scheduledDate == null) return false;
+
+    // Check if end time exists to give full duration grace period
+    DateTime? endDateTime =
+        NotificationService.parseTaskDateTime(task.date, task.endTime);
+
+    final now = DateTime.now();
+
+    if (endDateTime != null && endDateTime.isAfter(scheduledDate)) {
+      // Task is only overdue if its end time has passed
+      return endDateTime.isBefore(now);
+    }
+
+    // Otherwise, task is overdue if start time passed by at least 2 minutes (prevents same-minute 00s bug)
+    return scheduledDate.add(const Duration(minutes: 2)).isBefore(now);
+  }
 
   IconData _getCategoryIcon(String? cat) {
     switch (cat?.toLowerCase()) {
@@ -59,9 +81,13 @@ class TaskItemWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isOverdue = _isTaskOverdue(model);
+
     Color cardColor;
     if (model.isCompleted) {
       cardColor = const Color(0xFF10B981); // Modern Emerald Green for completed tasks
+    } else if (isOverdue) {
+      cardColor = const Color(0xFF881337); // Deep Crimson Red for overdue/neglected tasks
     } else {
       int prio = model.priority ?? model.color;
       switch (prio) {
@@ -82,7 +108,8 @@ class TaskItemWidget extends StatelessWidget {
     int subTasksTotal = model.subTasks?.length ?? 0;
     int subTasksDone = 0;
     if (subTasksTotal > 0 && model.subTasksCompleted != null) {
-      subTasksDone = model.subTasksCompleted!.where((element) => element).length;
+      subTasksDone =
+          model.subTasksCompleted!.where((element) => element).length;
     }
 
     return InkWell(
@@ -96,7 +123,7 @@ class TaskItemWidget extends StatelessWidget {
           borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
-              color: cardColor.withValues(alpha: 0.3),
+              color: cardColor.withValues(alpha: 0.4),
               blurRadius: 6,
               offset: const Offset(0, 3),
             )
@@ -108,10 +135,43 @@ class TaskItemWidget extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Category and Priority Header Row
+                  // Category, Priority, & Overdue Header Row
                   Row(
                     children: [
-                      if (model.category != null && model.category!.isNotEmpty) ...[
+                      if (isOverdue) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade900.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: Colors.amberAccent.withValues(alpha: 0.8)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                size: 12,
+                                color: Colors.amberAccent,
+                              ),
+                              const Gap(4),
+                              Text(
+                                'OVERDUE',
+                                style: getSmallTextStyle(
+                                  color: Colors.amberAccent,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Gap(8),
+                      ],
+                      if (model.category != null &&
+                          model.category!.isNotEmpty) ...[
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
@@ -140,7 +200,7 @@ class TaskItemWidget extends StatelessWidget {
                         ),
                         const Gap(8),
                       ],
-                      if (model.priority != null) ...[
+                      if (model.priority != null && !isOverdue) ...[
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
@@ -159,7 +219,9 @@ class TaskItemWidget extends StatelessWidget {
                       ],
                     ],
                   ),
-                  if (model.category != null || model.priority != null)
+                  if (model.category != null ||
+                      model.priority != null ||
+                      isOverdue)
                     const Gap(8),
                   Text(
                     model.title,
@@ -229,10 +291,12 @@ class TaskItemWidget extends StatelessWidget {
             RotatedBox(
               quarterTurns: 3,
               child: Text(
-                model.isCompleted ? "COMPLETED" : "TODO",
+                model.isCompleted
+                    ? "COMPLETED"
+                    : (isOverdue ? "OVERDUE" : "TODO"),
                 style: getTitleTextStyle(
                   context,
-                  color: AppColors.whiteColor,
+                  color: isOverdue ? Colors.amberAccent : AppColors.whiteColor,
                   fontWeight: FontWeight.bold,
                   fontSize: 11,
                 ),

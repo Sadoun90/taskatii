@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:intl/intl.dart';
 import 'package:taskatii/core/models/task_model.dart';
 import 'package:taskatii/features/main_layout/main_layout.dart';
@@ -15,12 +16,23 @@ class NotificationService {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
-  // Reserved notification IDs for focus/pomodoro sessions
-  static const int _focusOngoingNotifId = 999997;
-  static const int _focusNotifId = 999998;
+  // Reserved notification IDs & Channel IDs
+  static const String _alarmChannelId = 'taskatii_reminders';
+  static const String _focusChannelId = 'taskatii_focus';
+  static const String _focusOngoingChannelId = 'taskatii_focus_live_v100';
+
+  static const int _focusOngoingNotifId = 888881;
+  static const int _focusNotifId = 888882;
 
   static Future<void> init() async {
     tz.initializeTimeZones();
+    try {
+      final timezoneInfo = await FlutterTimezone.getLocalTimezone();
+      final String timeZoneName = timezoneInfo.identifier;
+      tz.setLocalLocation(tz.getLocation(timeZoneName));
+    } catch (e) {
+      debugPrint('Error initializing local timezone: $e');
+    }
 
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -40,27 +52,7 @@ class NotificationService {
     await _notificationsPlugin.initialize(
       settings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        if (response.payload == 'focus') {
-          navigatorKey.currentState?.pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (context) => const MainLayout(initialIndex: 2),
-            ),
-            (route) => false,
-          );
-        } else if (response.payload != null && response.payload!.startsWith('task:')) {
-          final taskId = response.payload!.replaceFirst('task:', '');
-          final task = AppLocalStorage.taskBox.get(taskId);
-
-          navigatorKey.currentState?.pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (context) => MainLayout(
-                initialIndex: 0,
-                targetTask: task,
-              ),
-            ),
-            (route) => false,
-          );
-        }
+        handleNotificationPayload(response.payload);
       },
     );
 
@@ -74,17 +66,18 @@ class NotificationService {
 
       const AndroidNotificationChannel reminderChannel =
           AndroidNotificationChannel(
-        'taskatii_reminders',
-        'Task Reminders',
-        description: 'Notifications for upcoming taskatii tasks',
+        _alarmChannelId,
+        'Task Alarms',
+        description: 'Loud alarm notifications for taskatii tasks',
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
       );
 
       const AndroidNotificationChannel focusChannel =
           AndroidNotificationChannel(
-        'taskatii_focus',
+        _focusChannelId,
         'Focus Sessions',
         description: 'Pomodoro / focus timer notifications',
         importance: Importance.max,
@@ -94,10 +87,10 @@ class NotificationService {
 
       const AndroidNotificationChannel focusOngoingChannel =
           AndroidNotificationChannel(
-        'taskatii_focus_ongoing',
+        _focusOngoingChannelId,
         'Active Focus Timer',
         description: 'Ongoing Pomodoro focus countdown timer',
-        importance: Importance.low,
+        importance: Importance.max,
         playSound: false,
         enableVibration: false,
       );
@@ -109,185 +102,324 @@ class NotificationService {
   }
 
   // ─────────────────────────────────────────────
-  // Task Reminder Notification (Scheduled)
+  // Helper Date/Time Parser
+  // ─────────────────────────────────────────────
+
+  static DateTime? parseTaskDateTime(String dateStr, String timeStr) {
+    DateTime? parsedDate;
+    final dateFormats = [
+      DateFormat.yMd(),
+      DateFormat('M/d/yyyy'),
+      DateFormat('d/M/yyyy'),
+      DateFormat('yyyy-MM-dd'),
+      DateFormat('yyyy/MM/dd'),
+    ];
+    for (final fmt in dateFormats) {
+      try {
+        parsedDate = fmt.parse(dateStr);
+        break;
+      } catch (_) {}
+    }
+    if (parsedDate == null) return null;
+
+    DateTime? parsedTime;
+    final timeFormats = [
+      DateFormat('h:mm a'),
+      DateFormat('hh:mm a'),
+      DateFormat('H:mm'),
+      DateFormat('HH:mm'),
+    ];
+    for (final fmt in timeFormats) {
+      try {
+        parsedTime = fmt.parse(timeStr);
+        break;
+      } catch (_) {}
+    }
+    if (parsedTime == null) return null;
+
+    return DateTime(
+      parsedDate.year,
+      parsedDate.month,
+      parsedDate.day,
+      parsedTime.hour,
+      parsedTime.minute,
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Overdue Task Notifications
+  // ─────────────────────────────────────────────
+
+  /// Checks for tasks that are overdue and shows a notification for each missed task.
+  static Future<void> checkAndNotifyOverdueTasks() async {
+    try {
+      final now = DateTime.now();
+      final tasks = AppLocalStorage.taskBox.values;
+
+      for (final task in tasks) {
+        if (task.isCompleted) continue;
+        if (task.isRepeat != null &&
+            task.isRepeat!.isNotEmpty &&
+            task.isRepeat != 'None') continue;
+
+        // Ensure each missed task notification is only displayed ONCE
+        bool alreadyNotified =
+            AppLocalStorage.getCachedData('overdue_notified_${task.id}') ?? false;
+        if (alreadyNotified) continue;
+
+        final scheduledDate = parseTaskDateTime(task.date, task.startTime);
+        if (scheduledDate == null) continue;
+
+        DateTime? endDate = parseTaskDateTime(task.date, task.endTime);
+        DateTime thresholdDate = (endDate != null && endDate.isAfter(scheduledDate))
+            ? endDate
+            : scheduledDate.add(const Duration(minutes: 2));
+
+        // If task threshold time has passed (overdue) within the last 48 hours
+        final diffInMinutes = now.difference(thresholdDate).inMinutes;
+        if (thresholdDate.isBefore(now) && diffInMinutes >= 0 && diffInMinutes <= 2880) {
+          final int overdueId =
+              ((task.notificationId ?? task.id.hashCode.abs()) % 400000) + 500000;
+
+          final body = '⚠️ You missed: "${task.title}" scheduled at ${task.startTime}';
+
+          final BigTextStyleInformation bigTextStyle = BigTextStyleInformation(
+            body,
+            htmlFormatBigText: true,
+            contentTitle: '<b>⚠️ Overdue Task!</b>',
+            htmlFormatContentTitle: true,
+            summaryText: 'Taskatii Missed Task',
+          );
+
+          final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+            _alarmChannelId,
+            'Task Reminders',
+            channelDescription: 'Loud alarm notifications for taskatii tasks',
+            importance: Importance.max,
+            priority: Priority.max,
+            category: AndroidNotificationCategory.alarm,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
+            styleInformation: bigTextStyle,
+            playSound: true,
+            enableVibration: true,
+            icon: '@mipmap/ic_launcher',
+          );
+
+          final details = NotificationDetails(
+            android: androidDetails,
+            iOS: const DarwinNotificationDetails(
+              presentAlert: true,
+              presentSound: true,
+            ),
+          );
+
+          await _notificationsPlugin.show(
+            overdueId,
+            '⚠️ Overdue Task!',
+            body,
+            details,
+            payload: 'task:${task.id}',
+          );
+
+          // Record flag so this notification never repeats on app relaunch
+          AppLocalStorage.casheData('overdue_notified_${task.id}', true);
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ─────────────────────────────────────────────
+  // Task Reminder Notifications (Start & Overdue)
   // ─────────────────────────────────────────────
 
   static Future<void> scheduleTaskNotification(TaskModel task) async {
     if (task.notificationId == null) return;
 
     try {
-      // Parse task date with multi-format fallback
-      DateTime date;
-      try {
-        date = DateFormat.yMd().parse(task.date);
-      } catch (_) {
-        try {
-          date = DateFormat('M/d/yyyy').parse(task.date);
-        } catch (_) {
-          try {
-            date = DateFormat('d/M/yyyy').parse(task.date);
-          } catch (_) {
-            date = DateTime.now();
-          }
-        }
-      }
+      DateTime now = DateTime.now();
 
-      // Parse task time with multi-format fallback
-      DateTime time;
-      try {
-        time = DateFormat('h:mm a').parse(task.startTime);
-      } catch (_) {
-        try {
-          time = DateFormat('hh:mm a').parse(task.startTime);
-        } catch (_) {
-          try {
-            time = DateFormat('HH:mm').parse(task.startTime);
-          } catch (_) {
-            time = DateTime.now();
-          }
-        }
-      }
-
-      DateTime scheduledDate = DateTime(
+      // 1. Parse Start Date & Time
+      DateTime date = parseTaskDateTime(task.date, task.startTime) ?? now;
+      DateTime scheduledStart = DateTime(
         date.year,
         date.month,
         date.day,
-        time.hour,
-        time.minute,
+        date.hour,
+        date.minute,
       );
 
-      // Calculate reminder time (6 hours before scheduled task start time)
-      DateTime now = DateTime.now();
-      DateTime reminderTime = scheduledDate.subtract(const Duration(hours: 6));
+      // 2. Parse End Date & Time (Fallback: Start + 1 hour)
+      DateTime? endDateParsed = parseTaskDateTime(task.date, task.endTime);
+      DateTime scheduledEnd = (endDateParsed != null && endDateParsed.isAfter(scheduledStart))
+          ? endDateParsed
+          : scheduledStart.add(const Duration(hours: 1));
 
-      if (reminderTime.isBefore(now)) {
-        if (scheduledDate.isAfter(now)) {
-          reminderTime = scheduledDate;
-        } else {
-          // If task starts right now or recently, trigger in 5 seconds
-          reminderTime = now.add(const Duration(seconds: 5));
-        }
-      }
+      final int startNotifId = task.notificationId!;
+      final int overdueNotifId = ((startNotifId % 400000) + 500000);
 
-      String remainingText = scheduledDate.isAfter(now)
-          ? (scheduledDate.difference(now).inHours >= 1
-              ? 'Starts in ${scheduledDate.difference(now).inHours} hours'
-              : 'Starts in ${scheduledDate.difference(now).inMinutes} mins')
-          : 'Starts Now';
+      // 3. Schedule START Alarm Notification (fires at task.startTime)
+      if (scheduledStart.isAfter(now)) {
+        String remainingText = scheduledStart.difference(now).inHours >= 1
+            ? 'Starts in ${scheduledStart.difference(now).inHours} hours'
+            : 'Starts in ${scheduledStart.difference(now).inMinutes} mins';
 
-      String titleText = '⏰ TASK ALARM: ${task.title}';
-      String bodyText = task.discription.isNotEmpty
-          ? '📌 Scheduled: ${task.startTime} - ${task.endTime}\n📝 ${task.discription}'
-          : '📌 Scheduled Start: ${task.startTime} | Time to get to work! 🚀';
+        String startTitle = '⏰ TASK ALARM: ${task.title}';
+        String startBody = task.discription.isNotEmpty
+            ? '📌 Scheduled: ${task.startTime} - ${task.endTime}\n📝 ${task.discription}'
+            : '📌 Scheduled Start: ${task.startTime} | Time to get to work! 🚀';
 
-      BigTextStyleInformation bigTextStyleInformation = BigTextStyleInformation(
-        bodyText,
-        htmlFormatBigText: true,
-        contentTitle: '⏰ <b>${task.title}</b>',
-        htmlFormatContentTitle: true,
-        summaryText: 'Taskatii Alarm 🕒 $remainingText',
-        htmlFormatSummaryText: true,
-      );
-
-      AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'taskatii_reminders',
-        'Task Reminders',
-        channelDescription: 'Notifications for upcoming taskatii tasks',
-        importance: Importance.max,
-        priority: Priority.max,
-        fullScreenIntent: true,
-        styleInformation: bigTextStyleInformation,
-        playSound: true,
-        enableVibration: true,
-        subText: '⏰ $remainingText',
-      );
-
-      NotificationDetails details = NotificationDetails(
-        android: androidDetails,
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentSound: true,
-          presentBadge: true,
-        ),
-      );
-
-      tz.TZDateTime tzScheduledTime =
-          tz.TZDateTime.from(reminderTime, tz.local);
-
-      DateTimeComponents? matchDateTimeComponents;
-      if (task.isRepeat == 'Daily') {
-        matchDateTimeComponents = DateTimeComponents.time;
-      } else if (task.isRepeat == 'Weekly') {
-        matchDateTimeComponents = DateTimeComponents.dayOfWeekAndTime;
-      } else if (task.isRepeat == 'Monthly') {
-        matchDateTimeComponents = DateTimeComponents.dayOfMonthAndTime;
-      }
-
-      // Only show immediate status bar notification if task starts within 6 hours
-      bool isStartingSoon = scheduledDate.difference(now).inHours <= 6;
-      if (isStartingSoon) {
-        try {
-          await _notificationsPlugin.show(
-            task.notificationId!,
-            titleText,
-            bodyText,
-            details,
-            payload: 'task:${task.id}',
-          );
-        } catch (_) {}
-      } else {
-        // If task is far in future (> 6 hours), cancel any previous status bar card
-        await _notificationsPlugin.cancel(task.notificationId!);
-      }
-
-      try {
-        if (matchDateTimeComponents != null) {
-          await _notificationsPlugin.zonedSchedule(
-            task.notificationId!,
-            titleText,
-            bodyText,
-            tzScheduledTime,
-            details,
-            payload: 'task:${task.id}',
-            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-            uiLocalNotificationDateInterpretation:
-                UILocalNotificationDateInterpretation.absoluteTime,
-            matchDateTimeComponents: matchDateTimeComponents,
-          );
-        } else {
-          await _notificationsPlugin.zonedSchedule(
-            task.notificationId!,
-            titleText,
-            bodyText,
-            tzScheduledTime,
-            details,
-            payload: 'task:${task.id}',
-            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-            uiLocalNotificationDateInterpretation:
-                UILocalNotificationDateInterpretation.absoluteTime,
-          );
-        }
-      } catch (_) {
-        // Fallback for Android OS restricting exact alarms without special permission
-        await _notificationsPlugin.zonedSchedule(
-          task.notificationId!,
-          titleText,
-          bodyText,
-          tzScheduledTime,
-          details,
-          payload: 'task:${task.id}',
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
+        BigTextStyleInformation bigTextStyleStart = BigTextStyleInformation(
+          startBody,
+          htmlFormatBigText: true,
+          contentTitle: '⏰ <b>${task.title}</b>',
+          htmlFormatContentTitle: true,
+          summaryText: 'Taskatii Alarm 🕒 $remainingText',
+          htmlFormatSummaryText: true,
         );
+
+        AndroidNotificationDetails startAndroidDetails = AndroidNotificationDetails(
+          _alarmChannelId,
+          'Task Alarms',
+          channelDescription: 'Loud alarm notifications for taskatii tasks',
+          importance: Importance.max,
+          priority: Priority.max,
+          category: AndroidNotificationCategory.alarm,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+          fullScreenIntent: true,
+          styleInformation: bigTextStyleStart,
+          playSound: true,
+          enableVibration: true,
+          subText: '⏰ $remainingText',
+          visibility: NotificationVisibility.public,
+          icon: '@mipmap/ic_launcher',
+        );
+
+        NotificationDetails startDetails = NotificationDetails(
+          android: startAndroidDetails,
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentSound: true,
+            presentBadge: true,
+          ),
+        );
+
+        tz.TZDateTime tzStartTime = tz.TZDateTime.from(scheduledStart, tz.local);
+
+        try {
+          await _notificationsPlugin.zonedSchedule(
+            startNotifId,
+            startTitle,
+            startBody,
+            tzStartTime,
+            startDetails,
+            payload: 'task:${task.id}',
+            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+          );
+        } catch (_) {
+          await _notificationsPlugin.zonedSchedule(
+            startNotifId,
+            startTitle,
+            startBody,
+            tzStartTime,
+            startDetails,
+            payload: 'task:${task.id}',
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+          );
+        }
+      }
+
+      // 4. Schedule OVERDUE Notification (fires automatically at task.endTime)
+      if (scheduledEnd.isAfter(now) && !task.isCompleted) {
+        String overdueTitle = '⚠️ OVERDUE TASK: ${task.title}';
+        String overdueBody =
+            '📌 Scheduled end time (${task.endTime}) has passed!\nTap to complete or reschedule.';
+
+        BigTextStyleInformation bigTextStyleOverdue = BigTextStyleInformation(
+          overdueBody,
+          htmlFormatBigText: true,
+          contentTitle: '<b>⚠️ Overdue Task!</b>',
+          htmlFormatContentTitle: true,
+          summaryText: 'Taskatii Missed Task',
+          htmlFormatSummaryText: true,
+        );
+
+        AndroidNotificationDetails overdueAndroidDetails = AndroidNotificationDetails(
+          _alarmChannelId,
+          'Task Reminders',
+          channelDescription: 'Loud alarm notifications for taskatii tasks',
+          importance: Importance.max,
+          priority: Priority.max,
+          category: AndroidNotificationCategory.alarm,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+          styleInformation: bigTextStyleOverdue,
+          playSound: true,
+          enableVibration: true,
+          icon: '@mipmap/ic_launcher',
+        );
+
+        NotificationDetails overdueDetails = NotificationDetails(
+          android: overdueAndroidDetails,
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentSound: true,
+          ),
+        );
+
+        tz.TZDateTime tzEndTime = tz.TZDateTime.from(scheduledEnd, tz.local);
+
+        try {
+          await _notificationsPlugin.zonedSchedule(
+            overdueNotifId,
+            overdueTitle,
+            overdueBody,
+            tzEndTime,
+            overdueDetails,
+            payload: 'task:${task.id}',
+            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+          );
+        } catch (_) {
+          try {
+            await _notificationsPlugin.zonedSchedule(
+              overdueNotifId,
+              overdueTitle,
+              overdueBody,
+              tzEndTime,
+              overdueDetails,
+              payload: 'task:${task.id}',
+              androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+              uiLocalNotificationDateInterpretation:
+                  UILocalNotificationDateInterpretation.absoluteTime,
+            );
+          } catch (_) {}
+        }
       }
     } catch (_) {}
   }
 
   static Future<void> cancelNotification(int? notificationId) async {
     if (notificationId != null) {
+      final int overdueId = ((notificationId % 400000) + 500000);
       await _notificationsPlugin.cancel(notificationId);
+      await _notificationsPlugin.cancel(overdueId);
     }
+  }
+
+  static Future<void> requestNotificationPermission() async {
+    try {
+      final androidImplementation = _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      if (androidImplementation != null) {
+        await androidImplementation.requestNotificationsPermission();
+        await androidImplementation.requestExactAlarmsPermission();
+      }
+    } catch (_) {}
   }
 
   // ─────────────────────────────────────────────
@@ -306,30 +438,21 @@ class NotificationService {
     final tz.TZDateTime tzEndTime = tz.TZDateTime.from(endTime, tz.local);
     final String endTimeString = DateFormat('hh:mm a').format(endTime);
 
-    final String ongoingTitle = taskTitle != null && taskTitle.isNotEmpty
-        ? '⏱️ FOCUS: $taskTitle (FINISH: $endTimeString)'
-        : '⏱️ FOCUS SESSION ACTIVE (FINISH: $endTimeString)';
+    final String ongoingTitle = (taskTitle != null && taskTitle.trim().isNotEmpty)
+        ? '⏱️ FOCUS: $taskTitle'
+        : '⏱️ FOCUS SESSION ACTIVE';
 
-    final String ongoingBody =
-        '🎯 TASK: ${taskTitle ?? "Focus Session"}\n⏰ END TIME: $endTimeString\n⏳ COUNTDOWN ACTIVE IN STATUS BAR';
-
-    final BigTextStyleInformation bigTextStyleOngoing = BigTextStyleInformation(
-      ongoingBody,
-      htmlFormatBigText: true,
-      contentTitle: '⏱️ <b>$ongoingTitle</b>',
-      htmlFormatContentTitle: true,
-      summaryText: '⌛ Ends at $endTimeString',
-      htmlFormatSummaryText: true,
-    );
+    final String ongoingBody = (taskTitle != null && taskTitle.trim().isNotEmpty)
+        ? '🎯 Task: $taskTitle | Ends at $endTimeString'
+        : '🎯 Focus Session Active | Ends at $endTimeString';
 
     final AndroidNotificationDetails ongoingAndroidDetails =
         AndroidNotificationDetails(
-      'taskatii_focus_ongoing',
+      _focusOngoingChannelId,
       'Active Focus Timer',
       channelDescription: 'Ongoing Pomodoro focus countdown timer',
-      importance: Importance.high,
-      priority: Priority.high,
-      styleInformation: bigTextStyleOngoing,
+      importance: Importance.max,
+      priority: Priority.max,
       ongoing: true,
       autoCancel: false,
       onlyAlertOnce: true,
@@ -337,7 +460,11 @@ class NotificationService {
       chronometerCountDown: true,
       when: endTime.millisecondsSinceEpoch,
       showWhen: true,
+      playSound: false,
+      enableVibration: false,
+      icon: '@mipmap/ic_launcher',
       subText: '⌛ Ends: $endTimeString',
+      visibility: NotificationVisibility.public,
     );
 
     final NotificationDetails ongoingDetails = NotificationDetails(
@@ -347,6 +474,7 @@ class NotificationService {
       ),
     );
 
+    // 1. Show live ongoing notification in status bar immediately
     try {
       await _notificationsPlugin.show(
         _focusOngoingNotifId,
@@ -355,11 +483,13 @@ class NotificationService {
         ongoingDetails,
         payload: 'focus',
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error showing ongoing focus notification: $e');
+    }
 
-    // 2. Scheduled completion notification when time reaches 0
+    // 2. Schedule completion notification when timer ends
     final String title = '🎉 FOCUS SESSION COMPLETED!';
-    final String body = taskTitle != null && taskTitle.isNotEmpty
+    final String body = (taskTitle != null && taskTitle.trim().isNotEmpty)
         ? 'Great work on "$taskTitle"!\nTime for a well-deserved 5-minute break. 🧘'
         : 'Amazing focus!\nTime to take a 5-minute break. 🧘';
 
@@ -374,7 +504,7 @@ class NotificationService {
 
     final AndroidNotificationDetails completeAndroidDetails =
         AndroidNotificationDetails(
-      'taskatii_focus',
+      _focusChannelId,
       'Focus Sessions',
       channelDescription: 'Pomodoro / focus timer notifications',
       importance: Importance.max,
@@ -383,6 +513,8 @@ class NotificationService {
       styleInformation: bigTextStyleComplete,
       playSound: true,
       enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+      visibility: NotificationVisibility.public,
     );
 
     final NotificationDetails completeDetails = NotificationDetails(
@@ -400,6 +532,7 @@ class NotificationService {
         body,
         tzEndTime,
         completeDetails,
+        payload: 'focus',
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
@@ -412,11 +545,14 @@ class NotificationService {
           body,
           tzEndTime,
           completeDetails,
+          payload: 'focus',
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
         );
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Error scheduling focus completion notification: $e');
+      }
     }
   }
 
@@ -427,7 +563,7 @@ class NotificationService {
     await cancelFocusNotification();
 
     final String title = '🎉 FOCUS SESSION COMPLETED!';
-    final String body = taskTitle != null && taskTitle.isNotEmpty
+    final String body = (taskTitle != null && taskTitle.trim().isNotEmpty)
         ? 'Great work on "$taskTitle"!\nTime for a 5-minute break. 🧘'
         : 'Amazing focus!\nTime to take a 5-minute break. 🧘';
 
@@ -442,7 +578,7 @@ class NotificationService {
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'taskatii_focus',
+      _focusChannelId,
       'Focus Sessions',
       channelDescription: 'Pomodoro / focus timer notifications',
       importance: Importance.max,
@@ -451,6 +587,8 @@ class NotificationService {
       styleInformation: bigTextStyle,
       playSound: true,
       enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+      visibility: NotificationVisibility.public,
     );
 
     final NotificationDetails details = NotificationDetails(
@@ -467,13 +605,60 @@ class NotificationService {
         title,
         body,
         details,
+        payload: 'focus',
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error showing focus complete notification: $e');
+    }
   }
 
   /// Cancels all focus session notifications (ongoing & completion).
   static Future<void> cancelFocusNotification() async {
-    await _notificationsPlugin.cancel(_focusOngoingNotifId);
-    await _notificationsPlugin.cancel(_focusNotifId);
+    try {
+      await _notificationsPlugin.cancel(_focusOngoingNotifId);
+      await _notificationsPlugin.cancel(_focusNotifId);
+    } catch (_) {}
+  }
+
+  // ─────────────────────────────────────────────
+  // Tap & Payload Navigation Handlers
+  // ─────────────────────────────────────────────
+
+  static Future<NotificationResponse?> getAppLaunchNotificationDetails() async {
+    try {
+      final details =
+          await _notificationsPlugin.getNotificationAppLaunchDetails();
+      if (details != null && details.didNotificationLaunchApp) {
+        return details.notificationResponse;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static void handleNotificationPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return;
+
+    if (payload == 'focus') {
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => const MainLayout(initialIndex: 2),
+        ),
+        (route) => false,
+      );
+    } else if (payload.startsWith('task:')) {
+      final taskId = payload.replaceFirst('task:', '');
+      final task = AppLocalStorage.taskBox.get(taskId);
+
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => MainLayout(
+            initialIndex: 0,
+            targetTask: task,
+          ),
+        ),
+        (route) => false,
+      );
+    }
   }
 }
+

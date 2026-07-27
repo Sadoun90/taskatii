@@ -17,7 +17,10 @@ Future<void> main() async {
   runApp(const MainApp());
 
   // Initialize notifications asynchronously in the background
-  NotificationService.init();
+  NotificationService.init().then((_) {
+    // After init, check for any overdue tasks and notify
+    NotificationService.checkAndNotifyOverdueTasks();
+  });
 }
 
 class MainApp extends StatefulWidget {
