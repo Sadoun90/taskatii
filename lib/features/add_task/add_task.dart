@@ -18,9 +18,15 @@ class AddTask extends StatefulWidget {
 
 class _AddTaskState extends State<AddTask> {
   String taskDate = DateFormat.yMd().format(DateTime.now());
-  String startTime = DateFormat('hh:mm a').format(DateTime.now());
-  String endTime = DateFormat('hh:mm a')
+  String startTime = DateFormat('hh:mm a', 'en').format(DateTime.now());
+  String endTime = DateFormat('hh:mm a', 'en')
       .format(DateTime.now().add(const Duration(hours: 1)));
+
+  String _formatTimeOfDay(TimeOfDay tod) {
+    final now = DateTime.now();
+    final dt = DateTime(now.year, now.month, now.day, tod.hour, tod.minute);
+    return DateFormat('hh:mm a', 'en').format(dt);
+  }
 
   String selectedCategory = 'General';
   int selectedPriority = 1; // 0: High, 1: Medium, 2: Low
@@ -104,9 +110,8 @@ class _AddTaskState extends State<AddTask> {
         ),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -123,12 +128,12 @@ class _AddTaskState extends State<AddTask> {
               TextFormField(
                 controller: titleController,
                 decoration: const InputDecoration(
-                  hintText: 'e.g. Go to gym or finish report',
+                  hintText: 'Enter task title',
                 ),
               ),
               const Gap(16),
 
-              // Category Selector
+              // Category Picker
               Text(
                 'Category',
                 style: getTitleTextStyle(
@@ -140,47 +145,50 @@ class _AddTaskState extends State<AddTask> {
               const Gap(6),
               SizedBox(
                 height: 42,
-                child: ListView.builder(
+                child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: categories.length,
+                  separatorBuilder: (_, __) => const Gap(8),
                   itemBuilder: (context, index) {
                     final cat = categories[index];
-                    bool isSelected = selectedCategory == cat['name'];
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        showCheckmark: false,
-                        avatar: Icon(
-                          cat['icon'],
-                          size: 16,
-                          color: isSelected
-                              ? Colors.white
-                              : AppColors.primaryColor,
-                        ),
-                        label: Text(
-                          cat['name'],
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : (isDark ? Colors.white : Colors.black87),
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        selected: isSelected,
-                        selectedColor: AppColors.primaryColor,
-                        backgroundColor: isDark
-                            ? Colors.grey.shade800
-                            : Colors.grey.shade200,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              selectedCategory = cat['name'];
-                            });
-                          }
-                        },
+                    final isSelected = selectedCategory == cat['name'];
+                    return ChoiceChip(
+                      showCheckmark: false,
+                      avatar: Icon(
+                        cat['icon'],
+                        size: 16,
+                        color: isSelected
+                            ? AppColors.whiteColor
+                            : AppColors.primaryColor,
                       ),
+                      label: Text(
+                        cat['name'],
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isSelected
+                              ? AppColors.whiteColor
+                              : (isDark ? Colors.white70 : Colors.black87),
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedColor: AppColors.primaryColor,
+                      backgroundColor:
+                          isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                          color: isSelected
+                              ? AppColors.primaryColor
+                              : (isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade300),
+                        ),
+                      ),
+                      onSelected: (val) {
+                        setState(() {
+                          selectedCategory = cat['name'];
+                        });
+                      },
                     );
                   },
                 ),
@@ -199,18 +207,18 @@ class _AddTaskState extends State<AddTask> {
               const Gap(6),
               Row(
                 children: [
-                  _buildPriorityChip(0, "High 🔴", AppColors.highPriority),
-                  const Gap(10),
-                  _buildPriorityChip(1, "Medium 🟡", AppColors.mediumPriority),
-                  const Gap(10),
-                  _buildPriorityChip(2, "Low 🟢", AppColors.lowPriority),
+                  _buildPriorityChip(0, 'High', AppColors.redcolor),
+                  const Gap(8),
+                  _buildPriorityChip(1, 'Medium', AppColors.orangeColor),
+                  const Gap(8),
+                  _buildPriorityChip(2, 'Low', AppColors.greenColor),
                 ],
               ),
               const Gap(16),
 
               // Repeat Selector
               Text(
-                'Repeat Rule 🔄',
+                'Repeat',
                 style: getTitleTextStyle(
                   context,
                   color: Theme.of(context).colorScheme.onSurface,
@@ -219,41 +227,44 @@ class _AddTaskState extends State<AddTask> {
               ),
               const Gap(6),
               SizedBox(
-                height: 40,
-                child: ListView.builder(
+                height: 42,
+                child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: repeatOptions.length,
+                  separatorBuilder: (_, __) => const Gap(8),
                   itemBuilder: (context, index) {
                     final option = repeatOptions[index];
-                    bool isSelected = selectedRepeat == option;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        showCheckmark: false,
-                        label: Text(
-                          option,
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : (isDark ? Colors.white : Colors.black87),
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
+                    final isSelected = selectedRepeat == option;
+                    return ChoiceChip(
+                      showCheckmark: false,
+                      label: Text(
+                        option,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isSelected
+                              ? AppColors.whiteColor
+                              : (isDark ? Colors.white70 : Colors.black87),
                         ),
-                        selected: isSelected,
-                        selectedColor: AppColors.primaryColor,
-                        backgroundColor: isDark
-                            ? Colors.grey.shade800
-                            : Colors.grey.shade200,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              selectedRepeat = option;
-                            });
-                          }
-                        },
                       ),
+                      selected: isSelected,
+                      selectedColor: AppColors.primaryColor,
+                      backgroundColor:
+                          isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                          color: isSelected
+                              ? AppColors.primaryColor
+                              : (isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade300),
+                        ),
+                      ),
+                      onSelected: (val) {
+                        setState(() {
+                          selectedRepeat = option;
+                        });
+                      },
                     );
                   },
                 ),
@@ -262,7 +273,7 @@ class _AddTaskState extends State<AddTask> {
 
               // Note Field
               Text(
-                'Note',
+                'Note / Description',
                 style: getTitleTextStyle(
                   context,
                   color: Theme.of(context).colorScheme.onSurface,
@@ -274,14 +285,14 @@ class _AddTaskState extends State<AddTask> {
                 controller: noteController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  hintText: 'Add additional details or notes...',
+                  hintText: 'Enter task note or description',
                 ),
               ),
               const Gap(16),
 
-              // Sub-tasks Section
+              // Subtasks Section
               Text(
-                'Sub-Tasks (Checklist)',
+                'Subtasks',
                 style: getTitleTextStyle(
                   context,
                   color: Theme.of(context).colorScheme.onSurface,
@@ -294,26 +305,13 @@ class _AddTaskState extends State<AddTask> {
                   Expanded(
                     child: TextFormField(
                       controller: subTaskController,
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (val) {
-                        if (val.trim().isNotEmpty) {
-                          setState(() {
-                            subTasks.add(val.trim());
-                            subTasksCompleted.add(false);
-                            subTaskController.clear();
-                          });
-                        }
-                      },
                       decoration: const InputDecoration(
-                        hintText: 'Add a sub-task step...',
+                        hintText: 'Add a subtask step',
                       ),
                     ),
                   ),
-                  const Gap(10),
+                  const Gap(8),
                   IconButton.filled(
-                    style: IconButton.styleFrom(
-                      backgroundColor: AppColors.primaryColor,
-                    ),
                     onPressed: () {
                       if (subTaskController.text.trim().isNotEmpty) {
                         setState(() {
@@ -323,31 +321,45 @@ class _AddTaskState extends State<AddTask> {
                         });
                       }
                     },
-                    icon: const Icon(Icons.add, color: Colors.white),
-                  )
+                    icon: const Icon(Icons.add),
+                  ),
                 ],
               ),
               if (subTasks.isNotEmpty) ...[
-                const Gap(10),
+                const Gap(8),
                 ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: subTasks.length,
                   itemBuilder: (context, index) {
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      child: ListTile(
-                        dense: true,
-                        title: Text(subTasks[index]),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.close, color: Colors.red),
-                          onPressed: () {
-                            setState(() {
-                              subTasks.removeAt(index);
-                              subTasksCompleted.removeAt(index);
-                            });
-                          },
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Checkbox(
+                        value: subTasksCompleted[index],
+                        onChanged: (val) {
+                          setState(() {
+                            subTasksCompleted[index] = val ?? false;
+                          });
+                        },
+                      ),
+                      title: Text(
+                        subTasks[index],
+                        style: TextStyle(
+                          decoration: subTasksCompleted[index]
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline,
+                            size: 18, color: Colors.red),
+                        onPressed: () {
+                          setState(() {
+                            subTasks.removeAt(index);
+                            subTasksCompleted.removeAt(index);
+                          });
+                        },
                       ),
                     );
                   },
@@ -417,7 +429,7 @@ class _AddTaskState extends State<AddTask> {
                             ).then((value) {
                               if (value != null) {
                                 setState(() {
-                                  startTime = value.format(context);
+                                  startTime = _formatTimeOfDay(value);
                                 });
                               }
                             });
@@ -458,7 +470,7 @@ class _AddTaskState extends State<AddTask> {
                             ).then((value) {
                               if (value != null) {
                                 setState(() {
-                                  endTime = value.format(context);
+                                  endTime = _formatTimeOfDay(value);
                                 });
                               }
                             });
@@ -544,10 +556,13 @@ class _AddTaskState extends State<AddTask> {
                     Switch(
                       value: isReminderEnabled,
                       activeTrackColor: AppColors.primaryColor,
-                      onChanged: (val) {
+                      onChanged: (val) async {
                         setState(() {
                           isReminderEnabled = val;
                         });
+                        if (val) {
+                          await NotificationService.requestNotificationPermission();
+                        }
                       },
                     ),
                   ],
@@ -567,7 +582,9 @@ class _AddTaskState extends State<AddTask> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
+                    final nav = Navigator.of(context);
+
                     if (titleController.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -617,13 +634,23 @@ class _AddTaskState extends State<AddTask> {
                       notificationId: notifId,
                     );
 
+                    // Cancel old notification BEFORE overwriting (use the OLD id)
+                    if (isEditMode && widget.task!.notificationId != null) {
+                      await NotificationService.cancelNotification(
+                          widget.task!.notificationId);
+                    }
+
+                    // Delete then re-put so Hive fires a change event and
+                    // ValueListenableBuilder rebuilds the task list
+                    AppLocalStorage.taskBox.delete(id);
                     AppLocalStorage.casheTaskData(id, model);
 
                     if (isReminderEnabled) {
-                      NotificationService.scheduleTaskNotification(model);
+                      await NotificationService.scheduleTaskNotification(model);
                     }
 
-                    Navigator.pop(context);
+                    if (!mounted) return;
+                    nav.pop();
                   },
                   child: Text(
                     isEditMode ? 'Update Task' : 'Create Task',

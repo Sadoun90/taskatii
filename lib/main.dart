@@ -17,10 +17,35 @@ Future<void> main() async {
   runApp(const MainApp());
 
   // Initialize notifications asynchronously in the background
-  NotificationService.init().then((_) {
-    // After init, check for any overdue tasks and notify
-    NotificationService.checkAndNotifyOverdueTasks();
+  NotificationService.init().then((_) async {
+    final now = DateTime.now();
+
+    // 1. Reschedule all FUTURE task notifications (in case they were lost
+    //    after a device reboot or the app was force-killed).
+    //    Only reschedule tasks whose start time is strictly in the future —
+    //    already-started tasks must NOT be rescheduled to avoid duplicate
+    //    overdue notifications firing alongside checkAndNotifyOverdueTasks.
+    for (final task in AppLocalStorage.taskBox.values) {
+      if (task.isCompleted) continue;
+      if (task.notificationId == null) continue;
+
+      final scheduledStart =
+          NotificationService.parseTaskDateTime(task.date, task.startTime);
+      if (scheduledStart == null) continue;
+
+      // Strictly future only — if already started, skip rescheduling
+      if (scheduledStart.isAfter(now)) {
+        // Cancel first to avoid duplicates if app is opened multiple times
+        await NotificationService.cancelNotification(task.notificationId);
+        await NotificationService.scheduleTaskNotification(task);
+      }
+    }
+
+    // 2. Check for any overdue tasks (start time already passed, task not done)
+    //    and show a missed-task notification if not already shown.
+    await NotificationService.checkAndNotifyOverdueTasks();
   });
+
 }
 
 class MainApp extends StatefulWidget {

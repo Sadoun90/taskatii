@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -17,12 +18,36 @@ class NotificationService {
       GlobalKey<NavigatorState>();
 
   // Reserved notification IDs & Channel IDs
-  static const String _alarmChannelId = 'taskatii_reminders';
-  static const String _focusChannelId = 'taskatii_focus';
+  // NOTE: bump the suffix (v2, v3 …) whenever you need to force Android
+  // to recreate the channel with new settings (e.g., sound change).
+  static const String _alarmChannelId        = 'taskatii_alarm_v2';
+  static const String _reminderChannelId     = 'taskatii_reminder_v2';
+  static const String _focusChannelId        = 'taskatii_focus';
   static const String _focusOngoingChannelId = 'taskatii_focus_live_v100';
+
+  // Old channel IDs — kept only so we can delete them on first run
+  static const List<String> _legacyChannelIds = [
+    'taskatii_reminders',
+    'taskatii_alarm_v1',
+    'taskatii_reminder_v1',
+  ];
 
   static const int _focusOngoingNotifId = 888881;
   static const int _focusNotifId = 888882;
+
+  // Notification ID offsets for each task:
+  //   startNotifId        → _getBaseId(notificationId)      (fires at start time: 1 .. 600,000)
+  //   overdueNotifId      → _getBaseId(notificationId) + 1M (fires at end time:   1,000,001 .. 1,600,000)
+  //   reminderNotifId     → _getBaseId(notificationId) + 2M (fires 6h before:    2,000,001 .. 2,600,000)
+  static const int _overdueOffset  = 1000000;
+  static const int _reminderOffset = 2000000;
+
+  static int _getBaseId(int notificationId) {
+    return (notificationId.abs() % 600000) + 1;
+  }
+
+  /// How many hours before the task to send the advance reminder.
+  static const int _reminderHoursBefore = 6;
 
   static Future<void> init() async {
     tz.initializeTimeZones();
@@ -64,17 +89,42 @@ class NotificationService {
     if (androidImplementation != null) {
       await androidImplementation.requestNotificationsPermission();
 
-      const AndroidNotificationChannel reminderChannel =
+      // Delete legacy channels so Android re-creates them with fresh settings
+      for (final oldId in _legacyChannelIds) {
+        try {
+          await androidImplementation.deleteNotificationChannel(oldId);
+        } catch (_) {}
+      }
+
+      // ── Alarm channel (max importance, alarm audio stream) ──────────────
+      // Uses Android's built-in alarm sound via the alarm audio-attributes
+      // stream, which also bypasses Do-Not-Disturb.
+      final AndroidNotificationChannel alarmChannel =
           AndroidNotificationChannel(
         _alarmChannelId,
         'Task Alarms',
-        description: 'Loud alarm notifications for taskatii tasks',
+        description: 'Full-volume alarm for task start & overdue alerts',
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
         audioAttributesUsage: AudioAttributesUsage.alarm,
+        showBadge: true,
       );
 
+      // ── Reminder channel (high importance, notification stream) ─────────
+      // Used for the 6-hour advance reminder (quieter than the alarm).
+      const AndroidNotificationChannel reminderChannel =
+          AndroidNotificationChannel(
+        _reminderChannelId,
+        'Task Reminders',
+        description: '6-hour advance reminder for upcoming tasks',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+      );
+
+      // ── Focus channel ───────────────────────────────────────────────────
       const AndroidNotificationChannel focusChannel =
           AndroidNotificationChannel(
         _focusChannelId,
@@ -85,6 +135,7 @@ class NotificationService {
         enableVibration: true,
       );
 
+      // ── Focus ongoing (silent countdown) ───────────────────────────────
       const AndroidNotificationChannel focusOngoingChannel =
           AndroidNotificationChannel(
         _focusOngoingChannelId,
@@ -95,6 +146,7 @@ class NotificationService {
         enableVibration: false,
       );
 
+      await androidImplementation.createNotificationChannel(alarmChannel);
       await androidImplementation.createNotificationChannel(reminderChannel);
       await androidImplementation.createNotificationChannel(focusChannel);
       await androidImplementation.createNotificationChannel(focusOngoingChannel);
@@ -105,18 +157,33 @@ class NotificationService {
   // Helper Date/Time Parser
   // ─────────────────────────────────────────────
 
+  static String _normalizeArabicString(String input) {
+    String s = input;
+    const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    for (int i = 0; i < 10; i++) {
+      s = s.replaceAll(arabicDigits[i], '$i');
+    }
+    s = s.replaceAll('ص', 'AM').replaceAll('م', 'PM');
+    return s.trim();
+  }
+
   static DateTime? parseTaskDateTime(String dateStr, String timeStr) {
+    final cleanDateStr = _normalizeArabicString(dateStr);
+    final cleanTimeStr = _normalizeArabicString(timeStr);
+
     DateTime? parsedDate;
     final dateFormats = [
       DateFormat.yMd(),
       DateFormat('M/d/yyyy'),
       DateFormat('d/M/yyyy'),
+      DateFormat('M-d-yyyy'),
+      DateFormat('d-M-yyyy'),
       DateFormat('yyyy-MM-dd'),
       DateFormat('yyyy/MM/dd'),
     ];
     for (final fmt in dateFormats) {
       try {
-        parsedDate = fmt.parse(dateStr);
+        parsedDate = fmt.parse(cleanDateStr);
         break;
       } catch (_) {}
     }
@@ -124,6 +191,8 @@ class NotificationService {
 
     DateTime? parsedTime;
     final timeFormats = [
+      DateFormat('h:mm a', 'en'),
+      DateFormat('hh:mm a', 'en'),
       DateFormat('h:mm a'),
       DateFormat('hh:mm a'),
       DateFormat('H:mm'),
@@ -131,7 +200,7 @@ class NotificationService {
     ];
     for (final fmt in timeFormats) {
       try {
-        parsedTime = fmt.parse(timeStr);
+        parsedTime = fmt.parse(cleanTimeStr);
         break;
       } catch (_) {}
     }
@@ -150,22 +219,38 @@ class NotificationService {
   // Overdue Task Notifications
   // ─────────────────────────────────────────────
 
-  /// Checks for tasks that are overdue and shows a notification for each missed task.
   static Future<void> checkAndNotifyOverdueTasks() async {
     try {
       final now = DateTime.now();
       final tasks = AppLocalStorage.taskBox.values;
 
+      // Get all currently pending (scheduled but not yet fired) notifications.
+      final pendingRequests = await _notificationsPlugin.pendingNotificationRequests();
+      final pendingIds = pendingRequests.map((r) => r.id).toSet();
+
       for (final task in tasks) {
         if (task.isCompleted) continue;
+
+        // Skip tasks where the user didn't enable a reminder.
+        if (task.notificationId == null) continue;
+
         if (task.isRepeat != null &&
             task.isRepeat!.isNotEmpty &&
-            task.isRepeat != 'None') continue;
+            task.isRepeat != 'None') {
+          continue;
+        }
 
         // Ensure each missed task notification is only displayed ONCE
         bool alreadyNotified =
             AppLocalStorage.getCachedData('overdue_notified_${task.id}') ?? false;
         if (alreadyNotified) continue;
+
+        final int baseId = _getBaseId(task.notificationId!);
+        final int overdueId = baseId + _overdueOffset;
+
+        // If the overdue notification is already scheduled (pending), skip —
+        // it will fire at the correct endTime without duplicating.
+        if (pendingIds.contains(overdueId)) continue;
 
         final scheduledDate = parseTaskDateTime(task.date, task.startTime);
         if (scheduledDate == null) continue;
@@ -175,12 +260,9 @@ class NotificationService {
             ? endDate
             : scheduledDate.add(const Duration(minutes: 2));
 
-        // If task threshold time has passed (overdue) within the last 48 hours
+        // Only show if overdue within the last 48 hours
         final diffInMinutes = now.difference(thresholdDate).inMinutes;
         if (thresholdDate.isBefore(now) && diffInMinutes >= 0 && diffInMinutes <= 2880) {
-          final int overdueId =
-              ((task.notificationId ?? task.id.hashCode.abs()) % 400000) + 500000;
-
           final body = '⚠️ You missed: "${task.title}" scheduled at ${task.startTime}';
 
           final BigTextStyleInformation bigTextStyle = BigTextStyleInformation(
@@ -221,16 +303,91 @@ class NotificationService {
             payload: 'task:${task.id}',
           );
 
-          // Record flag so this notification never repeats on app relaunch
+          // Mark as notified so it never fires again on app relaunch
           AppLocalStorage.casheData('overdue_notified_${task.id}', true);
         }
       }
     } catch (_) {}
   }
 
+
   // ─────────────────────────────────────────────
   // Task Reminder Notifications (Start & Overdue)
   // ─────────────────────────────────────────────
+
+  /// Returns true if the app can schedule exact alarms (Android 12+ check).
+  static Future<bool> _canScheduleExact() async {
+    try {
+      final androidImpl = _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      if (androidImpl == null) return true;
+      final canSchedule = await androidImpl.canScheduleExactNotifications();
+      return canSchedule ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Helper: schedules a zonedSchedule with exact alarm if permitted,
+  /// falls back to inexact automatically. NEVER shows immediately.
+  static Future<void> _scheduleZoned({
+    required int id,
+    required String title,
+    required String body,
+    required tz.TZDateTime scheduledTime,
+    required NotificationDetails details,
+    String? payload,
+  }) async {
+    final nowTz = tz.TZDateTime.now(tz.local);
+    if (!scheduledTime.isAfter(nowTz)) {
+      debugPrint(
+        '[NotifService] Skipping _scheduleZoned for id=$id — '
+        'scheduled time ($scheduledTime) is not in future (now=$nowTz)',
+      );
+      return;
+    }
+
+    final bool canExact = await _canScheduleExact();
+    final AndroidScheduleMode mode = canExact
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
+
+    try {
+      await _notificationsPlugin.zonedSchedule(
+        id,
+        title,
+        body,
+        scheduledTime,
+        details,
+        payload: payload,
+        androidScheduleMode: mode,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      debugPrint(
+        '[NotifService] zonedSchedule (mode=$mode) failed for id=$id: $e. Retrying inexact...',
+      );
+      if (mode != AndroidScheduleMode.inexactAllowWhileIdle) {
+        try {
+          await _notificationsPlugin.zonedSchedule(
+            id,
+            title,
+            body,
+            scheduledTime,
+            details,
+            payload: payload,
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+          );
+        } catch (err2) {
+          debugPrint('[NotifService] Inexact zonedSchedule also failed for id=$id: $err2');
+        }
+      }
+    }
+  }
 
   static Future<void> scheduleTaskNotification(TaskModel task) async {
     if (task.notificationId == null) return;
@@ -239,14 +396,13 @@ class NotificationService {
       DateTime now = DateTime.now();
 
       // 1. Parse Start Date & Time
-      DateTime date = parseTaskDateTime(task.date, task.startTime) ?? now;
-      DateTime scheduledStart = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        date.hour,
-        date.minute,
-      );
+      DateTime? dateParsed = parseTaskDateTime(task.date, task.startTime);
+      if (dateParsed == null) {
+        debugPrint('[NotifService] Could not parse task start date/time for task ${task.title}');
+        return;
+      }
+
+      DateTime scheduledStart = dateParsed;
 
       // 2. Parse End Date & Time (Fallback: Start + 1 hour)
       DateTime? endDateParsed = parseTaskDateTime(task.date, task.endTime);
@@ -254,21 +410,90 @@ class NotificationService {
           ? endDateParsed
           : scheduledStart.add(const Duration(hours: 1));
 
-      final int startNotifId = task.notificationId!;
-      final int overdueNotifId = ((startNotifId % 400000) + 500000);
+      final int baseId          = _getBaseId(task.notificationId!);
+      final int startNotifId    = baseId;
+      final int overdueNotifId  = baseId + _overdueOffset;
+      final int reminderNotifId = baseId + _reminderOffset;
 
-      // 3. Schedule START Alarm Notification (fires at task.startTime)
-      if (scheduledStart.isAfter(now)) {
-        String remainingText = scheduledStart.difference(now).inHours >= 1
-            ? 'Starts in ${scheduledStart.difference(now).inHours} hours'
+      // ── 3-A. 6-HOUR ADVANCE REMINDER ──────────────────────────────────────
+      final Duration timeUntilStart = scheduledStart.difference(now);
+      if (timeUntilStart.inMinutes > _reminderHoursBefore * 60) {
+        final DateTime reminderTime =
+            scheduledStart.subtract(Duration(hours: _reminderHoursBefore));
+        final tz.TZDateTime tzReminder = tz.TZDateTime.from(reminderTime, tz.local);
+
+        final String countdownText = timeUntilStart.inHours >= 24
+            ? '${(timeUntilStart.inHours / 24).floor()} day(s) and ${timeUntilStart.inHours % 24}h'
+            : '${timeUntilStart.inHours}h ${timeUntilStart.inMinutes % 60}min';
+
+        final String reminderTitle = '🔔 Upcoming Task: ${task.title}';
+        final String reminderBody  = task.discription.isNotEmpty
+            ? '⏳ Starts in $_reminderHoursBefore hours at ${task.startTime}\n'
+              '📝 ${task.discription}'
+            : '⏳ Starts in $_reminderHoursBefore hours at ${task.startTime}\n'
+              '📌 Total time remaining: $countdownText';
+
+        final BigTextStyleInformation reminderBigText = BigTextStyleInformation(
+          reminderBody,
+          htmlFormatBigText: true,
+          contentTitle: '🔔 <b>${task.title}</b> — in $_reminderHoursBefore hours',
+          htmlFormatContentTitle: true,
+          summaryText: 'Taskatii Reminder ⏳',
+          htmlFormatSummaryText: true,
+        );
+
+        final AndroidNotificationDetails reminderAndroid = AndroidNotificationDetails(
+          _reminderChannelId,
+          'Task Reminders',
+          channelDescription: '6-hour advance reminder for upcoming tasks',
+          importance: Importance.high,
+          priority: Priority.high,
+          styleInformation: reminderBigText,
+          playSound: true,
+          enableVibration: true,
+          vibrationPattern: Int64List.fromList([0, 300, 150, 300]),
+          icon: '@mipmap/ic_launcher',
+          visibility: NotificationVisibility.public,
+        );
+
+        final NotificationDetails reminderDetails = NotificationDetails(
+          android: reminderAndroid,
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentSound: true,
+          ),
+        );
+
+        await _scheduleZoned(
+          id: reminderNotifId,
+          title: reminderTitle,
+          body: reminderBody,
+          scheduledTime: tzReminder,
+          details: reminderDetails,
+          payload: 'task:${task.id}',
+        );
+
+        debugPrint(
+          '[NotifService] 6-h reminder scheduled for "${task.title}" '
+          'at ${reminderTime.toLocal()}',
+        );
+      }
+
+      // ── 3. START notification ──────────────────────────────────────────────
+      // Only schedule if startTime is strictly in the future.
+      final bool startInFuture = scheduledStart.isAfter(now);
+
+      if (startInFuture) {
+        final String remainingText = scheduledStart.difference(now).inHours >= 1
+            ? 'Starts in ${scheduledStart.difference(now).inHours}h'
             : 'Starts in ${scheduledStart.difference(now).inMinutes} mins';
 
-        String startTitle = '⏰ TASK ALARM: ${task.title}';
-        String startBody = task.discription.isNotEmpty
-            ? '📌 Scheduled: ${task.startTime} - ${task.endTime}\n📝 ${task.discription}'
-            : '📌 Scheduled Start: ${task.startTime} | Time to get to work! 🚀';
+        final String startTitle = '⏰ TASK ALARM: ${task.title}';
+        final String startBody = task.discription.isNotEmpty
+            ? '📌 ${task.startTime} - ${task.endTime}\n📝 ${task.discription}'
+            : '📌 Scheduled: ${task.startTime} | Time to get to work! 🚀';
 
-        BigTextStyleInformation bigTextStyleStart = BigTextStyleInformation(
+        final BigTextStyleInformation bigTextStyleStart = BigTextStyleInformation(
           startBody,
           htmlFormatBigText: true,
           contentTitle: '⏰ <b>${task.title}</b>',
@@ -277,10 +502,10 @@ class NotificationService {
           htmlFormatSummaryText: true,
         );
 
-        AndroidNotificationDetails startAndroidDetails = AndroidNotificationDetails(
+        final AndroidNotificationDetails startAndroidDetails = AndroidNotificationDetails(
           _alarmChannelId,
           'Task Alarms',
-          channelDescription: 'Loud alarm notifications for taskatii tasks',
+          channelDescription: 'Full-volume alarm for task start & overdue alerts',
           importance: Importance.max,
           priority: Priority.max,
           category: AndroidNotificationCategory.alarm,
@@ -289,12 +514,13 @@ class NotificationService {
           styleInformation: bigTextStyleStart,
           playSound: true,
           enableVibration: true,
+          vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
           subText: '⏰ $remainingText',
           visibility: NotificationVisibility.public,
           icon: '@mipmap/ic_launcher',
         );
 
-        NotificationDetails startDetails = NotificationDetails(
+        final NotificationDetails startDetails = NotificationDetails(
           android: startAndroidDetails,
           iOS: const DarwinNotificationDetails(
             presentAlert: true,
@@ -303,110 +529,91 @@ class NotificationService {
           ),
         );
 
-        tz.TZDateTime tzStartTime = tz.TZDateTime.from(scheduledStart, tz.local);
-
-        try {
-          await _notificationsPlugin.zonedSchedule(
-            startNotifId,
-            startTitle,
-            startBody,
-            tzStartTime,
-            startDetails,
-            payload: 'task:${task.id}',
-            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-            uiLocalNotificationDateInterpretation:
-                UILocalNotificationDateInterpretation.absoluteTime,
-          );
-        } catch (_) {
-          await _notificationsPlugin.zonedSchedule(
-            startNotifId,
-            startTitle,
-            startBody,
-            tzStartTime,
-            startDetails,
-            payload: 'task:${task.id}',
-            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-            uiLocalNotificationDateInterpretation:
-                UILocalNotificationDateInterpretation.absoluteTime,
-          );
-        }
+        final tz.TZDateTime tzStart = tz.TZDateTime.from(scheduledStart, tz.local);
+        await _scheduleZoned(
+          id: startNotifId,
+          title: startTitle,
+          body: startBody,
+          scheduledTime: tzStart,
+          details: startDetails,
+          payload: 'task:${task.id}',
+        );
+        debugPrint('[NotifService] Start notification scheduled for "${task.title}" at ${scheduledStart.toLocal()}');
       }
 
-      // 4. Schedule OVERDUE Notification (fires automatically at task.endTime)
-      if (scheduledEnd.isAfter(now) && !task.isCompleted) {
-        String overdueTitle = '⚠️ OVERDUE TASK: ${task.title}';
-        String overdueBody =
-            '📌 Scheduled end time (${task.endTime}) has passed!\nTap to complete or reschedule.';
+      // ── 4. OVERDUE notification ────────────────────────────────────────────
+      // Only schedule if the end time is at least 2 minutes in the future.
+      if (!task.isCompleted) {
+        final Duration timeUntilEnd = scheduledEnd.difference(now);
 
-        BigTextStyleInformation bigTextStyleOverdue = BigTextStyleInformation(
-          overdueBody,
-          htmlFormatBigText: true,
-          contentTitle: '<b>⚠️ Overdue Task!</b>',
-          htmlFormatContentTitle: true,
-          summaryText: 'Taskatii Missed Task',
-          htmlFormatSummaryText: true,
-        );
+        if (timeUntilEnd.inMinutes >= 2) {
+          final String overdueTitle = '⚠️ OVERDUE TASK: ${task.title}';
+          final String overdueBody =
+              '📌 Scheduled end time (${task.endTime}) has passed!\nTap to complete or reschedule.';
 
-        AndroidNotificationDetails overdueAndroidDetails = AndroidNotificationDetails(
-          _alarmChannelId,
-          'Task Reminders',
-          channelDescription: 'Loud alarm notifications for taskatii tasks',
-          importance: Importance.max,
-          priority: Priority.max,
-          category: AndroidNotificationCategory.alarm,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
-          styleInformation: bigTextStyleOverdue,
-          playSound: true,
-          enableVibration: true,
-          icon: '@mipmap/ic_launcher',
-        );
-
-        NotificationDetails overdueDetails = NotificationDetails(
-          android: overdueAndroidDetails,
-          iOS: const DarwinNotificationDetails(
-            presentAlert: true,
-            presentSound: true,
-          ),
-        );
-
-        tz.TZDateTime tzEndTime = tz.TZDateTime.from(scheduledEnd, tz.local);
-
-        try {
-          await _notificationsPlugin.zonedSchedule(
-            overdueNotifId,
-            overdueTitle,
+          final BigTextStyleInformation bigTextStyleOverdue = BigTextStyleInformation(
             overdueBody,
-            tzEndTime,
-            overdueDetails,
-            payload: 'task:${task.id}',
-            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-            uiLocalNotificationDateInterpretation:
-                UILocalNotificationDateInterpretation.absoluteTime,
+            htmlFormatBigText: true,
+            contentTitle: '<b>⚠️ Overdue Task!</b>',
+            htmlFormatContentTitle: true,
+            summaryText: 'Taskatii Missed Task',
+            htmlFormatSummaryText: true,
           );
-        } catch (_) {
-          try {
-            await _notificationsPlugin.zonedSchedule(
-              overdueNotifId,
-              overdueTitle,
-              overdueBody,
-              tzEndTime,
-              overdueDetails,
-              payload: 'task:${task.id}',
-              androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-              uiLocalNotificationDateInterpretation:
-                  UILocalNotificationDateInterpretation.absoluteTime,
-            );
-          } catch (_) {}
+
+          final AndroidNotificationDetails overdueAndroidDetails = AndroidNotificationDetails(
+            _alarmChannelId,
+            'Task Alarms',
+            channelDescription: 'Full-volume alarm for task start & overdue alerts',
+            importance: Importance.max,
+            priority: Priority.max,
+            category: AndroidNotificationCategory.alarm,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
+            styleInformation: bigTextStyleOverdue,
+            playSound: true,
+            enableVibration: true,
+            vibrationPattern: Int64List.fromList([0, 500, 200, 500, 200, 500]),
+            icon: '@mipmap/ic_launcher',
+          );
+
+          final NotificationDetails overdueDetails = NotificationDetails(
+            android: overdueAndroidDetails,
+            iOS: const DarwinNotificationDetails(
+              presentAlert: true,
+              presentSound: true,
+            ),
+          );
+
+          final tz.TZDateTime tzEnd = tz.TZDateTime.from(scheduledEnd, tz.local);
+          await _scheduleZoned(
+            id: overdueNotifId,
+            title: overdueTitle,
+            body: overdueBody,
+            scheduledTime: tzEnd,
+            details: overdueDetails,
+            payload: 'task:${task.id}',
+          );
+
+          debugPrint(
+            '[NotifService] Overdue notification scheduled for "${task.title}" '
+            'at ${scheduledEnd.toLocal()}',
+          );
         }
       }
-    } catch (_) {}
+
+    } catch (e) {
+      debugPrint('scheduleTaskNotification error: $e');
+    }
   }
 
   static Future<void> cancelNotification(int? notificationId) async {
     if (notificationId != null) {
-      final int overdueId = ((notificationId % 400000) + 500000);
+      final int baseId     = _getBaseId(notificationId);
+      final int overdueId  = baseId + _overdueOffset;
+      final int reminderId = baseId + _reminderOffset;
+      await _notificationsPlugin.cancel(baseId);
       await _notificationsPlugin.cancel(notificationId);
       await _notificationsPlugin.cancel(overdueId);
+      await _notificationsPlugin.cancel(reminderId);
     }
   }
 
